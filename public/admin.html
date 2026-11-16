@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quan tri - Safe Exam</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-title">Safe Exam - Bang quan tri</div>
+    <a href="index.html" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Trang thi sinh</a>
+  </header>
+
+  <main class="container" style="padding-top: 24px; padding-bottom: 60px;">
+    <!-- Thanh chon Tab -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('tabUpload')">Tao va Quan ly de thi</button>
+      <button class="tab-btn" onclick="switchTab('tabResults')">Ket qua va Nhat ky thao tac</button>
+    </div>
+
+    <!-- TAB 1: Tao & Quan ly de thi -->
+    <div id="tabUpload">
+      <div class="card">
+        <h2 style="margin-bottom: 12px;">Tao de thi moi</h2>
+        <p style="margin-bottom: 16px;">Tiep nhan de thi qua file JSON hoac file PDF so chuan.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label class="form-label">Tieu de de thi</label>
+            <input type="text" id="examTitle" class="form-control" placeholder="Vi du: Kiem tra Toan hoc ki 1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Thoi gian lam bai (phut)</label>
+            <input type="number" id="examDuration" class="form-control" value="45" min="1" required>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label class="form-label">Phan quyen tai khoan thi sinh</label>
+          <input type="text" id="assignedTo" class="form-control" value="emtrai" placeholder="Ten tai khoan thi sinh duoc phep lam">
+        </div>
+
+        <!-- Chon file PDF hoac JSON -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 220px;">
+            <label class="form-label">Cach 1: Tai len file JSON</label>
+            <input type="file" id="fileJson" accept=".json" class="form-control" onchange="handleJsonUpload(event)">
+          </div>
+          <div style="flex: 1; min-width: 220px;">
+            <label class="form-label">Cach 2: Tai len file PDF chuan</label>
+            <input type="file" id="filePdf" accept=".pdf" class="form-control" onchange="handlePdfUpload(event)">
+          </div>
+        </div>
+
+        <div id="uploadStatus" style="display: none; padding: 10px; margin-bottom: 14px;" class="alert-box alert-info"></div>
+
+        <!-- Khung xem truoc cau hoi -->
+        <div id="previewSection" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3>Danh sach cau hoi (<span id="previewCount">0</span> cau)</h3>
+            <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem;" onclick="addSampleQuestion()">Them cau thu cong</button>
+          </div>
+          <div id="previewList" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;"></div>
+
+          <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px;" onclick="saveExam()">Xuat ban de thi len he thong</button>
+        </div>
+      </div>
+
+      <!-- Danh sach de thi hien co -->
+      <div class="card" style="margin-top: 24px;">
+        <h3 style="margin-bottom: 12px;">Cac de thi da tao</h3>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Tieu de de thi</th>
+                <th>Thoi gian</th>
+                <th>Thi sinh duoc giao</th>
+                <th>Ngay tao</th>
+              </tr>
+            </thead>
+            <tbody id="examTableBody">
+              <tr><td colspan="5" style="text-align: center;">Dang tai danh sach...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Ket qua & Nhat ky thao tac (Audit Logs) -->
+    <div id="tabResults" style="display: none;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div>
+            <h2>Ket qua va Nhat ky bai lam</h2>
+            <p>Theo doi chi tiet diem so va tung hanh vi thao tac cua thi sinh sau khi nop bai.</p>
+          </div>
+          <button class="btn btn-outline" onclick="loadResults()">Lam moi</button>
+        </div>
+
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Thi sinh</th>
+                <th>Diem so</th>
+                <th>So cau dung</th>
+                <th>Thoi luong</th>
+                <th>Thoi diem nop</th>
+                <th>Chi tiet</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTableBody">
+              <tr><td colspan="7" style="text-align: center;">Dang tai du lieu...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal xem chi tiet bai lam va Nhat ky thao tac -->
+  <div id="detailModal" class="overlay" style="display: none;">
+    <div class="lock-screen" style="max-width: 680px; text-align: left; max-height: 85vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <h3 id="modalTitle">Chi tiet bai lam</h3>
+        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeDetailModal()">Dong</button>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <h4 style="margin-bottom: 8px;">1. Ket qua cau hoi</h4>
+        <div id="modalAnswersList" style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem;"></div>
+      </div>
+
+      <div>
+        <h4 style="margin-bottom: 8px;">2. Nhat ky thao tac trong luc lam bai (Action Logs)</h4>
+        <div id="modalLogsList" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem; background: #f8fafc;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

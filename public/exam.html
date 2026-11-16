@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
+  <title>Thi truc tuyen - Safe Exam</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header khi lam bai -->
+  <header class="app-header">
+    <div class="brand-title" id="headerTitle">Safe Exam</div>
+    <div id="headerRight" style="display: flex; align-items: center; gap: 12px;">
+      <span id="studentBadge" class="badge badge-blue"></span>
+      <div id="timerDisplay" class="timer-box" style="display: none;">00:00</div>
+    </div>
+  </header>
+
+  <main class="container container-narrow" style="padding-bottom: 80px;">
+    <!-- Man hinh 1: Danh sach de thi (Lazy Load) -->
+    <div id="viewExamList">
+      <div style="margin-bottom: 16px;">
+        <h2>Danh sach de thi</h2>
+        <p>Chon de thi ben duoi de bat dau lam bai.</p>
+      </div>
+      <div id="examListContainer">
+        <p style="text-align: center; padding: 20px;">Dang tai danh sach de thi...</p>
+      </div>
+    </div>
+
+    <!-- Man hinh 2: Giao dien lam bai -->
+    <div id="viewExamPlay" style="display: none;">
+      <div class="card" style="margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 0.85rem; color: var(--text-muted);">
+          <span id="questionCounter">Cau 1 / 10</span>
+          <span id="answeredStatus">Da chon: 0</span>
+        </div>
+        
+        <h3 id="questionText" style="margin-bottom: 20px; font-size: 1.15rem; line-height: 1.4;">Noi dung cau hoi</h3>
+        <div id="optionsContainer"></div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 16px;">
+        <button id="btnPrev" class="btn btn-outline" style="flex: 1;" onclick="navigateQuestion(-1)">Cau truoc</button>
+        <button id="btnNext" class="btn btn-outline" style="flex: 1;" onclick="navigateQuestion(1)">Cau tiep</button>
+      </div>
+
+      <div style="margin-top: 24px;">
+        <button id="btnSubmit" class="btn btn-primary btn-block" style="padding: 14px; font-size: 1rem;" onclick="confirmSubmit()">Nop bai thi</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Man hinh 3: Khoa sau khi nop bai (Lockout Overlay) -->
+  <div id="viewLockScreen" class="overlay" style="display: none;">
+    <div class="lock-screen">
+      <div class="lock-title">DA NOP BAI THANH CONG</div>
+      <p style="margin-bottom: 8px;">Ket qua bai thi cua ban:</p>
+      <div id="finalScore" class="score-display">--</div>
+      <p id="finalSummary" style="font-size: 0.95rem; margin-bottom: 16px;">Dung: -- / -- cau</p>
+      
+      <div class="alert-box alert-info" style="text-align: left; margin-bottom: 24px;">
+        Thiet bi dang o che do bao ve cua phong thi. Giu nguyen man hinh va cho giam thi mo khoa de roi phong.
+      </div>
+
+      <button class="btn btn-outline btn-block" style="font-size: 0.85rem;" onclick="showUnlockDialog()">Mo khoa thiet bi (Giam thi)</button>
+    </div>
+  </div>
+
+  <!-- Hop thoai nhap ma giam thi de mo khoa -->
+  <div id="viewUnlockModal" class="overlay" style="display: none; z-index: 110;">
+    <div class="lock-screen" style="max-width: 360px;">
+      <h3 style="margin-bottom: 12px;">Xac nhan Giam thi</h3>
+      <p style="margin-bottom: 16px;">Nhap mat khau giam thi de giai phong thiet bi.</p>
+      
+      <div class="form-group">
+        <input type="password" id="proctorInput" class="form-control" placeholder="Nhap mat khau..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
+      </div>
+      <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mat khau khong dung!</div>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Huy</button>
+        <button class="btn btn-primary" style="flex: 1;" onclick="verifyUnlock()">Xac nhan</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="exam.js"></script>
+</body>
+</html>

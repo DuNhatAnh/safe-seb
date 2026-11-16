@@ -1,0 +1,12 @@
+{
+  "name": "safe-seb",
+  "version": "1.0.0",
+  "description": "Safe Exam Browser - Kiosk lockdown and exam monitoring",
+  "main": "api/parse-pdf.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  }
+}

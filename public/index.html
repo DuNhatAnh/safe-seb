@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Safe Exam</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-title">Safe Exam</div>
+    <a href="admin.html" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Quan tri vien</a>
+  </header>
+
+  <main class="container container-narrow" style="padding-top: 40px;">
+    <div class="card" style="text-align: center;">
+      <h2 style="margin-bottom: 8px;">Cong thi truc tuyen</h2>
+      <p style="margin-bottom: 24px;">Nhap ten tai khoan de truy cap de thi duoc phan quyen.</p>
+
+      <form id="loginForm" onsubmit="handleEnter(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="username">Ten tai khoan thi sinh</label>
+          <input type="text" id="username" class="form-control" placeholder="Vi du: emtrai" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="padding: 12px;">Vao phong thi</button>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    function handleEnter(e) {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      if (!username) return;
+      window.location.href = `exam.html?user=${encodeURIComponent(username)}`;
+    }
+  </script>
+</body>
+</html>
