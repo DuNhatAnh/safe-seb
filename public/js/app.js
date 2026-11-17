@@ -27,10 +27,14 @@ async function supabaseRequest(endpoint, method = "GET", body = null) {
 
 // Cac thao tac voi bang exams (Quan ly de thi)
 const ExamService = {
-  // Lay danh sach de thi (Lazy Load - Chi lay tieu de va thoi gian, khong tai cau hoi)
+  // Lay tat ca de thi cho thi sinh (Tat ca user deu nhan duoc de thi ma khong can phan quyen)
+  async getAvailableExams() {
+    return await supabaseRequest("exams?select=id,title,duration_minutes,assigned_to,created_at&order=id.desc");
+  },
+
+  // Alias tuong thich: nhan tat ca de thi cho bat ky username nao
   async getAssignedExams(username) {
-    const query = `exams?select=id,title,duration_minutes,assigned_to,created_at&assigned_to=eq.${encodeURIComponent(username)}&order=id.desc`;
-    return await supabaseRequest(query);
+    return await this.getAvailableExams();
   },
 
   // Lay tat ca de thi cho Admin
@@ -44,12 +48,12 @@ const ExamService = {
     return data && data.length > 0 ? data[0] : null;
   },
 
-  // Tao de thi moi tu Admin
-  async createExam(title, durationMinutes, assignedTo, questions) {
+  // Tao de thi moi tu Admin (Mac dinh assigned_to = 'all' cho tat ca thi sinh)
+  async createExam(title, durationMinutes, questions, assignedTo = "all") {
     const payload = {
       title,
       duration_minutes: parseInt(durationMinutes, 10),
-      assigned_to: assignedTo,
+      assigned_to: assignedTo || "all",
       questions
     };
     return await supabaseRequest("exams", "POST", payload);

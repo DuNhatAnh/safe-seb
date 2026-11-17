@@ -155,11 +155,10 @@ function addSampleQuestion() {
   renderPreview();
 }
 
-// 4. Luu de thi len Supabase
+// 4. Luu de thi len Supabase (Tu dong phat cho tat ca thi sinh)
 async function saveExam() {
   const title = document.getElementById("examTitle").value.trim();
   const duration = document.getElementById("examDuration").value.trim();
-  const assignedTo = document.getElementById("assignedTo").value.trim();
 
   if (!title) {
     alert("Vui long nhap tieu de de thi!");
@@ -175,8 +174,8 @@ async function saveExam() {
   btn.textContent = "Dang luu de thi...";
 
   try {
-    await ExamService.createExam(title, duration, assignedTo, parsedQuestions);
-    alert("Da xuat ban de thi thanh cong!");
+    await ExamService.createExam(title, duration, parsedQuestions);
+    alert("Da xuat ban de thi thanh cong! Tat ca thi sinh bay gio deu co the vao lam.");
     document.getElementById("examTitle").value = "";
     parsedQuestions = [];
     document.getElementById("previewSection").style.display = "none";
@@ -208,7 +207,7 @@ async function loadExistingExams() {
           <td>#${ex.id}</td>
           <td><strong>${escapeHtml(ex.title)}</strong></td>
           <td>${ex.duration_minutes} phut</td>
-          <td><span class="badge badge-blue">${escapeHtml(ex.assigned_to)}</span></td>
+          <td><span class="badge badge-green">Tat ca thi sinh</span></td>
           <td>${dateStr}</td>
         </tr>
       `;

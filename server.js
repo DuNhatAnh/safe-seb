@@ -26,12 +26,23 @@ const server = http.createServer(async (req, res) => {
   let reqPath = req.url.split("?")[0];
   if (reqPath === "/") reqPath = "/index.html";
 
-  const filePath = path.join(PUBLIC_DIR, reqPath);
+  let filePath = path.join(PUBLIC_DIR, reqPath);
 
+  // Kiem tra file ton tai, neu khong co thi ho tro fallback vao public/css hoac public/js
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
-      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-      return res.end("404 Not Found");
+      // Thu tim trong public/css hoac public/js
+      const fallbackCss = path.join(PUBLIC_DIR, "css", reqPath);
+      const fallbackJs = path.join(PUBLIC_DIR, "js", reqPath);
+
+      if (fs.existsSync(fallbackCss) && fs.statSync(fallbackCss).isFile()) {
+        filePath = fallbackCss;
+      } else if (fs.existsSync(fallbackJs) && fs.statSync(fallbackJs).isFile()) {
+        filePath = fallbackJs;
+      } else {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("404 Not Found");
+      }
     }
 
     const ext = path.extname(filePath).toLowerCase();

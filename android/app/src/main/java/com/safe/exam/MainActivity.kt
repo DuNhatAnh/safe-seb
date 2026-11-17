@@ -13,8 +13,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
 
     // Thay doi thanh dia chi Vercel cua ban sau khi deploy
-    // Mac dinh tro toi localhost hoac web server
-    private val examUrl = "http://10.0.2.2:3000/exam.html?user=emtrai"
+    // Mac dinh tro toi trang dang nhap he thong Safe Exam
+    private val examUrl = "http://10.0.2.2:3000/index.html"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -1,40 +1,45 @@
-# Safe Exam System (safe-seb)
+# Safe Exam Browser (safe-seb)
 
-He thong kiem tra bai thi an toan voi co che khoa man hinh sau khi nop bai va dong bo ket qua ve Supabase.
+He thong thi truc tuyen an toan tich hop Kiosk Mode, giam sat thao tac (Audit Logs) va dong bo ket qua truc tiep voi Supabase.
 
-## 1. Cong nghe lua chon (Tech Stack)
+---
 
-### Frontend (Giao dien lam bai)
-- Cong nghe: HTML5 + CSS3 + JavaScript thuan (Vanilla JS).
-- Dac diem: Khong dung framework nang (React/Vue), dung luong duoi 50 KB, tai tuc thi, tiet kiem RAM toi da tren dien thoai.
+## 1. Khoi chay he thong (Backend va Frontend)
 
-### Backend & Database (Xu ly du lieu & Luu tru)
-- Cong nghe: Supabase REST API truc tiep (PostgREST + PostgreSQL).
-- Dac diem: Khong can dung server trung gian, he thong giao tiep thang voi Supabase qua giao thuc HTTPS bao mat.
-- Kha nang mo rong (Scale): Chuan doanh nghiep, xu ly tot tu 1-2 nguoi hien tai den hang ngan thi sinh nop bai dong thoi ma khong lo nghen co chai.
+He thong tich hop ca Backend (API boc tach PDF) va Frontend (Web app) trong mot may chu thong nhat:
 
-### Android Client (Bo khung khoa may)
-- Cong nghe: Android Kotlin Native (WebView + Kiosk Mode).
-- Dac diem: Dung luong file APK cuc nhe (duoi 3 MB). Nhap giao dien HTML truc tiep qua WebView va kich hoat API he dieu hanh startLockTask de vo hieu hoa nut Home, nut Back va thanh thong bao.
+```bash
+# Cai dat dependencies
+npm install
 
-## 2. Luong hoat dong chi tiet
+# Khoi chay may chu (Backend API va Frontend)
+npm start
+```
 
-1. Thi sinh mo App tren Android: App tu dong kich hoat che do Kiosk Mode, khoa cung toan bo thao tac thoat may.
-2. Thi sinh lam bai thi: Bai lam duoc tu dong luu nhap vao bo nho may de chong mat du lieu khi het pin hoac su co dot ngot.
-3. Thi sinh bam Nop bai:
-   - He thong tinh toan diem so.
-   - Gui ket qua truc tiep len Supabase qua REST API.
-   - Cho phan hoi xac nhan luu thanh cong tu Supabase (HTTP 201 Created).
-4. Khoa hoan tat:
-   - Man hinh chuyen sang trang thai Khoa bai thi.
-   - Khong the vuot thoat khoi man hinh duoi bat ky hinh thuc nao.
-5. Giai phong thiet bi:
-   - Giam thi kiem tra diem so tren Dashboard.
-   - Nhap dung mat khau PROCTOR_UNLOCK_PASSWORD de mo khoa Kiosk Mode va tra lai dien thoai binh thuong.
+- Dia chi truy cap: http://localhost:3000 (hoac http://localhost:3000/index.html)
 
-## 3. Cau hinh moi truong (.env)
-- SUPABASE_URL: Dia chi ket noi du an Supabase.
-- SUPABASE_PUBLISHABLE_KEY: Khoa truy cap API cong khai.
-- SUPABASE_DB_PASSWORD: Mat khau co so du lieu PostgreSQL.
-- PROCTOR_UNLOCK_PASSWORD: Mat khau giam thi dung de mo khoa man hinh.
-- PORT: Cong chay may chu kiem thu noi bo.
+---
+
+## 2. Huong dan dang nhap
+
+| Vai tro | Cach dang nhap | Quyen han |
+|---|---|---|
+| **Thi sinh (User)** | Nhap bat ky ten tai khoan nao (vd: nam, an...) | **Vao thang phong thi**, khong can mat khau. Nhan tat ca de thi hien co. |
+| **Quan tri (Admin)** | Nhap tai khoan: `admin`<br>Mat khau: `admin@123` | Quan ly de thi (Upload JSON/PDF), xem ket qua va toan bo nhat ky thao tac. |
+
+---
+
+## 3. Cau truc du an
+
+```text
+safe-seb/
+├── android/        # Ung dung Android Kiosk Mode Native (Kotlin)
+├── api/            # Backend API (boc tach cau hoi tu file PDF)
+├── database/       # Schema SQL va phan quyen RLS Supabase
+├── docs/           # Tai lieu dac ta ky thuat chi tiet
+├── public/         # Frontend Web App (HTML, CSS, JS thuan)
+│   ├── css/        # Stylesheets
+│   └── js/         # Logic app, admin va exam
+├── server.js       # May chu phuc vu API va Frontend
+└── package.json
+```

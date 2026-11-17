@@ -20,16 +20,15 @@ window.addEventListener("DOMContentLoaded", () => {
   loadAssignedExams();
 });
 
-// 1. Lazy load: Lay danh sach de thi
+// 1. Lazy load: Lay danh sach de thi cho thi sinh
 async function loadAssignedExams() {
   const container = document.getElementById("examListContainer");
   try {
-    const exams = await ExamService.getAssignedExams(currentStudent);
+    const exams = await ExamService.getAvailableExams();
     if (!exams || exams.length === 0) {
       container.innerHTML = `
         <div class="card" style="text-align: center; padding: 24px;">
-          <p>Chua co de thi nao duoc phan quyen cho tai khoan <strong>${currentStudent}</strong>.</p>
-          <a href="index.html" class="btn btn-outline" style="margin-top: 14px;">Chon tai khoan khac</a>
+          <p>Hien tai chua co de thi nao tren he thong.</p>
         </div>
       `;
       return;
@@ -295,9 +294,9 @@ function verifyUnlock() {
 function requestWebFullscreen() {
   const el = document.documentElement;
   if (el.requestFullscreen) {
-    el.requestFullscreen().catch(() => {});
+    el.requestFullscreen().catch(() => { });
   } else if (el.webkitRequestFullscreen) {
-    el.webkitRequestFullscreen().catch(() => {});
+    el.webkitRequestFullscreen().catch(() => { });
   }
 }
 
