@@ -10,6 +10,14 @@ GEMINI.md
 # Dependencies
 node_modules/
 
+# Android build artifacts
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+
 # Logs
 *.log
 npm-debug.log*

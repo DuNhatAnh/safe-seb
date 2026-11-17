@@ -2,9 +2,21 @@ let parsedQuestions = [];
 let allResultsData = [];
 
 window.addEventListener("DOMContentLoaded", () => {
+  // Kiem tra xac thuc quan tri vien
+  if (sessionStorage.getItem("safe_exam_admin_auth") !== "true") {
+    alert("Vui long dang nhap tai khoan quan tri!");
+    window.location.href = "index.html";
+    return;
+  }
+
   loadExistingExams();
   loadResults();
 });
+
+function logoutAdmin() {
+  sessionStorage.removeItem("safe_exam_admin_auth");
+  window.location.href = "index.html";
+}
 
 // Chuyen doi Tab
 function switchTab(tabId) {

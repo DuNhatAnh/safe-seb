@@ -3,36 +3,108 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Safe Exam</title>
+  <title>Dang nhap - Safe Exam</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="app-header">
     <div class="brand-title">Safe Exam</div>
-    <a href="admin.html" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Quan tri vien</a>
   </header>
 
   <main class="container container-narrow" style="padding-top: 40px;">
-    <div class="card" style="text-align: center;">
-      <h2 style="margin-bottom: 8px;">Cong thi truc tuyen</h2>
-      <p style="margin-bottom: 24px;">Nhap ten tai khoan de truy cap de thi duoc phan quyen.</p>
+    <div class="card" style="padding: 24px;">
+      <!-- Tab chuyen doi vai tro -->
+      <div class="tabs" style="justify-content: center; margin-bottom: 24px;">
+        <button id="tabBtnStudent" class="tab-btn active" onclick="switchLoginRole('student')">Sinh vien</button>
+        <button id="tabBtnAdmin" class="tab-btn" onclick="switchLoginRole('admin')">Quan tri vien</button>
+      </div>
 
-      <form id="loginForm" onsubmit="handleEnter(event)">
-        <div class="form-group" style="text-align: left;">
-          <label class="form-label" for="username">Ten tai khoan thi sinh</label>
-          <input type="text" id="username" class="form-control" placeholder="Vi du: emtrai" required autofocus>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block" style="padding: 12px;">Vao phong thi</button>
-      </form>
+      <!-- FORM 1: Sinh vien (Chi can nhap ten tai khoan) -->
+      <div id="formStudent">
+        <h2 style="margin-bottom: 6px; text-align: center;">Cong thi danh cho Sinh vien</h2>
+        <p style="margin-bottom: 20px; text-align: center;">Nhap ten tai khoan de truy cap de thi duoc giao.</p>
+
+        <form onsubmit="handleStudentLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="studentUsername">Ten tai khoan sinh vien</label>
+            <input type="text" id="studentUsername" class="form-control" placeholder="Vi du: emtrai" required autofocus>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" style="padding: 12px; margin-top: 10px;">Vao phong thi</button>
+        </form>
+      </div>
+
+      <!-- FORM 2: Quan tri vien (Nhap tai khoan va mat khau admin/admin@123) -->
+      <div id="formAdmin" style="display: none;">
+        <h2 style="margin-bottom: 6px; text-align: center;">Dang nhap Quan tri vien</h2>
+        <p style="margin-bottom: 20px; text-align: center;">Truy cap bang quan ly de thi va theo doi nhat ky.</p>
+
+        <form onsubmit="handleAdminLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="adminUsername">Tai khoan quan tri</label>
+            <input type="text" id="adminUsername" class="form-control" placeholder="admin" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="adminPassword">Mat khau</label>
+            <input type="password" id="adminPassword" class="form-control" placeholder="admin@123" required>
+          </div>
+
+          <div id="adminErrorBox" class="alert-box alert-danger" style="display: none; padding: 8px; font-size: 0.85rem; margin-bottom: 12px;">
+            Tai khoan hoac mat khau khong dung!
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" style="padding: 12px; margin-top: 6px;">Dang nhap Quan tri</button>
+        </form>
+      </div>
     </div>
   </main>
 
   <script>
-    function handleEnter(e) {
+    function switchLoginRole(role) {
+      const tabStudent = document.getElementById('tabBtnStudent');
+      const tabAdmin = document.getElementById('tabBtnAdmin');
+      const formStudent = document.getElementById('formStudent');
+      const formAdmin = document.getElementById('formAdmin');
+      const errorBox = document.getElementById('adminErrorBox');
+
+      errorBox.style.display = 'none';
+
+      if (role === 'student') {
+        tabStudent.classList.add('active');
+        tabAdmin.classList.remove('active');
+        formStudent.style.display = 'block';
+        formAdmin.style.display = 'none';
+        document.getElementById('studentUsername').focus();
+      } else {
+        tabAdmin.classList.add('active');
+        tabStudent.classList.remove('active');
+        formStudent.style.display = 'none';
+        formAdmin.style.display = 'block';
+        document.getElementById('adminUsername').focus();
+      }
+    }
+
+    // Xu ly dang nhap Sinh vien: Chi can ten tai khoan
+    function handleStudentLogin(e) {
       e.preventDefault();
-      const username = document.getElementById('username').value.trim();
-      if (!username) return;
-      window.location.href = `exam.html?user=${encodeURIComponent(username)}`;
+      const user = document.getElementById('studentUsername').value.trim();
+      if (!user) return;
+      window.location.href = `exam.html?user=${encodeURIComponent(user)}`;
+    }
+
+    // Xu ly dang nhap Admin: Kiem tra admin / admin@123
+    function handleAdminLogin(e) {
+      e.preventDefault();
+      const u = document.getElementById('adminUsername').value.trim();
+      const p = document.getElementById('adminPassword').value.trim();
+      const errorBox = document.getElementById('adminErrorBox');
+
+      if (u === 'admin' && p === 'admin@123') {
+        sessionStorage.setItem('safe_exam_admin_auth', 'true');
+        window.location.href = 'admin.html';
+      } else {
+        errorBox.textContent = 'Tai khoan hoac mat khau quan tri khong chinh xac!';
+        errorBox.style.display = 'block';
+      }
     }
   </script>
 </body>
