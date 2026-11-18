@@ -53,45 +53,23 @@ function parseNumber(s) {
   return null;
 }
 
-// 3. Kiem tra dap an cau tu luan ngan
-function isShortCorrect(userVal, answersList, answerKind) {
-  if (!Array.isArray(answersList) || answersList.length === 0) return false;
-
-  if (answerKind === "number") {
-    const userNum = parseNumber(userVal);
-    if (userNum === null) return false;
-    return answersList.some(ans => {
-      const ansNum = parseNumber(ans);
-      return ansNum !== null && Math.abs(userNum - ansNum) < 1e-9;
-    });
-  }
-
-  // answerKind === "text"
-  const cleanUser = String(userVal ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFC")
-    .replace(/\s+/g, " ");
-
-  return answersList.some(ans => {
-    const cleanAns = String(ans ?? "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFC")
-      .replace(/\s+/g, " ");
-    return cleanAns === cleanUser;
-  });
+// 3. Chuan hoa chuoi de so sanh dap an chu (bo hoa/thuong, khoang trang thua)
+function normalizeText(v) {
+  return String(v ?? "").trim().toLowerCase().normalize("NFC").replace(/\s+/g, " ");
 }
 
 // 4. Render cong thuc toan hoc KaTeX
 function renderMath(str) {
   if (typeof str !== "string") return escapeHtml(str);
-  if (!window.katex || typeof window.katex.renderToString !== "function") {
-    return escapeHtml(str);
+  // Dong bat dau bang "- " -> gach dau dong
+  str = str.replace(/^[ \t]*[-•][ \t]+/gm, "• ");
+  if (typeof window === "undefined" || !window.katex || typeof window.katex.renderToString !== "function") {
+    return textHtml(str);
   }
 
   const ESCAPED_DOLLAR = "___ESCAPED_DOLLAR___";
-  let processed = str.replace(/\\\$/g, ESCAPED_DOLLAR);
+  // $$...$$ da la khoi rieng -> bo xuong dong sat hai ben de khong thua dong trong
+  let processed = str.replace(/\\\$/g, ESCAPED_DOLLAR).replace(/\r?\n?(\$\$[\s\S]*?\$\$)\r?\n?/g, "$1");
 
   const parts = [];
   const mathRegex = /\$\$([\s\S]*?)\$\$|\$([^\$]+?)\$/g;
@@ -101,7 +79,7 @@ function renderMath(str) {
   while ((match = mathRegex.exec(processed)) !== null) {
     if (match.index > lastIndex) {
       const textPiece = processed.slice(lastIndex, match.index).replace(new RegExp(ESCAPED_DOLLAR, "g"), "$");
-      parts.push(escapeHtml(textPiece));
+      parts.push(textHtml(textPiece));
     }
 
     const isDisplay = match[1] !== undefined;
@@ -121,128 +99,94 @@ function renderMath(str) {
 
   if (lastIndex < processed.length) {
     const textPiece = processed.slice(lastIndex).replace(new RegExp(ESCAPED_DOLLAR, "g"), "$");
-    parts.push(escapeHtml(textPiece));
+    parts.push(textHtml(textPiece));
   }
 
   return parts.join("");
 }
 
+// Chu thuong: escape + xuong dong
+function textHtml(t) {
+  return escapeHtml(t).replace(/\r?\n/g, "<br>");
+}
+
+// 4b. Nen anh (file / clipboard) thanh data URL de nhung thang vao de thi
+function compressImage(file, maxWidth = 900, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) return reject(new Error("File không phải ảnh."));
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; // nen trang cho anh PNG trong suot
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(img.src);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => reject(new Error("Không đọc được ảnh."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 // 5. Tu sua dau gach cheo nguoc truoc khi JSON.parse
+// Lenh LaTeX bat dau bang chu trung voi escape JSON (\b \f \n \r \t \u) -> phai nhan doi.
+// Ngoai danh sach nay, "\n", "\t"... giu nguyen nghia JSON (xuong dong, tab).
+const TEX_JSON_LIKE = /^(?:beta|bar|binom|bigl|bigr|big|boxed|bot|bullet|bmod|frac|forall|flat|nabla|neq|ne|ni|nu|notin|not|neg|nmid|nexists|rightarrow|right|rho|rangle|rceil|rfloor|rm|times|theta|tanh|tan|textbf|text|tfrac|top|to|tau|triangle|tilde|therefore|underline|uparrow|cup)(?![a-zA-Z])/;
+
 function fixJsonBackslashes(jsonStr) {
   if (typeof jsonStr !== "string") return "";
-  // Tu nhan doi \ khi no dung truoc tu 2 chu cai tro len (vi du \frac -> \\frac, \sqrt -> \\sqrt)
-  return jsonStr.replace(/(?<!\\)\\(?=[a-zA-Z]{2,})/g, "\\\\");
+  let out = "";
+  for (let i = 0; i < jsonStr.length; i++) {
+    const c = jsonStr[i];
+    if (c !== "\\") { out += c; continue; }
+    if (jsonStr[i + 1] === "\\") { out += "\\\\"; i++; continue; } // da viet dung \\
+    const rest = jsonStr.slice(i + 1);
+    const isJsonEscape = /^["\/bfnrtu]/.test(rest) && !TEX_JSON_LIKE.test(rest);
+    out += isJsonEscape ? "\\" : "\\\\"; // \sqrt, \pi, \{, \, ... -> \\
+  }
+  return out;
 }
 
-// 6. Chuan hoa danh sach cau hoi ve {title, duration_minutes, questions, errors}
-function normalizeQuestions(data, strict = true) {
-  const errors = [];
-  let title = "";
-  let durationMinutes = null;
-  let rawList = [];
-
-  // Ho tro ca object co title/duration va mang cau hoi
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    if (typeof data.title === "string") title = data.title.trim();
-    if (data.duration_minutes !== undefined) durationMinutes = parseInt(data.duration_minutes, 10);
-    rawList = Array.isArray(data.questions) ? data.questions : [];
-  } else if (Array.isArray(data)) {
-    rawList = data;
-  } else {
-    return { title: "", duration_minutes: null, questions: [], errors: ["Du lieu JSON phai la mot mang hoac object co truong questions."] };
-  }
-
-  if (rawList.length === 0) {
-    return { title, duration_minutes: durationMinutes, questions: [], errors: ["De thi phai co it nhat 1 cau hoi."] };
-  }
-
-  const questions = rawList.map((q, i) => {
-    const n = i + 1;
-    const qText = typeof q?.question === "string" ? q.question.trim() : "";
-    if (!qText) errors.push(`Cau ${n}: thieu noi dung cau hoi (truong "question").`);
-
-    // Kiem tra ky tu dieu khien do thieu \\
-    if (/[\x08\x0c]/.test(qText)) {
-      errors.push(`Cau ${n}: phat hien ky tu dieu khien (hay viet \\\\ thay vi \\ truoc cong thuc toan).`);
-    }
-
-    const type = (q?.type === "short") ? "short" : "single";
-
-    if (type === "short") {
-      const answerKind = (q?.answer_kind === "text") ? "text" : "number";
-      const rawAns = Array.isArray(q?.answers) ? q.answers : (q?.answer !== undefined ? [q.answer] : []);
-      const answers = rawAns.map(a => String(a ?? "").trim()).filter(Boolean);
-
-      if (answers.length === 0) {
-        errors.push(`Cau ${n} (Tu luan): phai co it nhat 1 dap an chap nhan.`);
-      }
-
-      if (answerKind === "number") {
-        answers.forEach(ans => {
-          if (parseNumber(ans) === null) {
-            errors.push(`Cau ${n} (Tu luan so): dap an '${ans}' khong phai so hop le (vi du dung: 3/4, 0.75, 2 1/3).`);
-          }
-        });
-      }
-
-      return {
-        type: "short",
-        question: qText,
-        answer_kind: answerKind,
-        answers
-      };
-    }
-
-    // type === "single" (Trac nghiem)
-    const rawOpts = Array.isArray(q?.options) ? q.options : [];
-    const options = rawOpts.map(o => typeof o === "string"
-      ? { text: o.trim(), is_correct: false }
-      : { text: String(o?.text ?? "").trim(), is_correct: o?.is_correct === true || o?.correct === true });
-
-    if (options.length < 2 || options.length > PREFIXES.length) {
-      errors.push(`Cau ${n} (Trac nghiem): can tu 2 den ${PREFIXES.length} phuong an.`);
-    }
-
-    if (options.some(o => !o.text)) {
-      errors.push(`Cau ${n}: co phuong an bi bo trong.`);
-    }
-
-    const correctCount = options.filter(o => o.is_correct).length;
-    if (correctCount > 1 || (strict && correctCount !== 1)) {
-      errors.push(`Cau ${n}: can dung 1 dap an dung (hien co ${correctCount}).`);
-    }
-
-    return {
-      type: "single",
-      question: qText,
-      options
-    };
-  });
-
-  return {
-    title,
-    duration_minutes: durationMinutes,
-    questions,
-    errors
+// 6. Sao chep van ban (co fallback cho context http khong an toan)
+function copyText(text, btn) {
+  const done = () => {
+    if (!btn) return;
+    const old = btn.textContent;
+    btn.textContent = "Đã chép";
+    setTimeout(() => { btn.textContent = old; }, 1500);
   };
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { alert("Không thể sao chép tự động, hãy chép thủ công."); }
+    ta.remove();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(fallback);
+  } else {
+    fallback();
+  }
 }
 
-// 7. Kiem tra cau hoi co hop le khong
-function hasCorrectAnswer(q) {
-  if (!q) return false;
-  if (q.type === "short") {
-    return Array.isArray(q.answers) && q.answers.length > 0;
-  }
-  return Array.isArray(q.options) && q.options.filter(o => o.is_correct).length === 1;
-}
+// 7. Mo / dong modal (.overlay)
+function openModal(id) { document.getElementById(id).style.display = "flex"; }
+function closeModal(id) { document.getElementById(id).style.display = "none"; }
 
 // 8. Ham goi API Supabase REST
-async function supabaseRequest(endpoint, method = "GET", body = null) {
+async function supabaseRequest(endpoint, method = "GET", body = null, extraHeaders = {}) {
   const headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": `Bearer ${SUPABASE_KEY}`,
     "Content-Type": "application/json",
-    "Prefer": method === "POST" ? "return=representation" : ""
+    "Prefer": method === "POST" ? "return=representation" : "",
+    ...extraHeaders
   };
 
   const config = { method, headers };
@@ -314,6 +258,52 @@ const ResultService = {
 
   async getAllResults() {
     return await supabaseRequest("exam_results?select=*&order=id.desc");
+  },
+
+  // Cap nhat ket qua (giao vien cham tay). RLS chan update -> Supabase tra mang rong.
+  async updateResult(id, patch) {
+    const rows = await supabaseRequest(`exam_results?id=eq.${id}`, "PATCH", patch, { "Prefer": "return=representation" });
+    if (!rows || rows.length === 0) {
+      throw new Error("Supabase chưa cho phép cập nhật exam_results. Hãy chạy database/schema.sql (policy update).");
+    }
+    return rows[0];
+  }
+};
+
+// 10b. Cau hinh he thong (bang app_settings: key -> value jsonb)
+// Chua chay migration (khong co bang app_settings) -> tu dong luu tam o localStorage.
+const SettingsService = {
+  isLocal: false, // true: dang dung localStorage vi Supabase chua co bang
+
+  localKey: key => `safe_exam_setting_${key}`,
+
+  readLocal(key) {
+    try { return JSON.parse(localStorage.getItem(this.localKey(key))); } catch (e) { return null; }
+  },
+
+  async get(key) {
+    try {
+      const rows = await supabaseRequest(`app_settings?key=eq.${encodeURIComponent(key)}&select=value`);
+      this.isLocal = false;
+      return rows && rows.length > 0 ? rows[0].value : this.readLocal(key);
+    } catch (err) {
+      console.warn("app_settings chua san sang, dung localStorage:", err.message);
+      this.isLocal = true;
+      return this.readLocal(key);
+    }
+  },
+
+  async set(key, value) {
+    try { localStorage.setItem(this.localKey(key), JSON.stringify(value)); } catch (e) { }
+    try {
+      await supabaseRequest("app_settings?on_conflict=key", "POST", { key, value }, {
+        "Prefer": "resolution=merge-duplicates,return=representation"
+      });
+      this.isLocal = false;
+    } catch (err) {
+      console.warn("Khong luu duoc len Supabase, da luu tam o trinh duyet:", err.message);
+      this.isLocal = true;
+    }
   }
 };
 
@@ -380,14 +370,5 @@ const StorageHelper = {
 };
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    PREFIXES,
-    escapeHtml,
-    parseNumber,
-    isShortCorrect,
-    renderMath,
-    fixJsonBackslashes,
-    normalizeQuestions,
-    hasCorrectAnswer
-  };
+  module.exports = { PREFIXES, escapeHtml, textHtml, parseNumber, normalizeText, renderMath, fixJsonBackslashes };
 }

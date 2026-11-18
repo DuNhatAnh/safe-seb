@@ -25,7 +25,7 @@ npm start
 | Vai trò | Cách đăng nhập | Quyền hạn |
 |---|---|---|
 | **Thí sinh (User)** | Nhập bất kỳ tên tài khoản nào (ví dụ: nam, an, hoa...) | **Vào thẳng phòng thi**, không cần mật khẩu. Nhận danh sách tất cả đề thi hiện có. |
-| **Quản trị (Admin)** | Nhập tài khoản: `admin`<br>Mật khẩu: `admin@123` | Nhập đề thi bằng JSON (tự điền tiêu đề/thời lượng), tạo/sửa câu hỏi thủ công kèm công thức KaTeX, xóa cứng đề thi, xem kết quả và toàn bộ nhật ký thao tác. |
+| **Quản trị (Admin)** | Nhập tài khoản: `admin`<br>Mật khẩu: `admin@123` | Tạo mẫu cấu trúc đề theo Phần I, II, III... (Trắc nghiệm, Đúng sai, Trả lời ngắn, Tự luận), nhập đề bằng JSON, thêm/sửa câu kèm công thức KaTeX và hình vẽ, chấm tay câu tự luận, xem kết quả và nhật ký thao tác. |
 
 ---
 
@@ -38,7 +38,7 @@ safe-seb/
 ├── docs/               # Bản đặc tả kỹ thuật chi tiết (spec.md)
 ├── public/             # Giao diện Web (HTML, CSS, JS thuần)
 │   ├── css/            # Tập trung toàn bộ giao diện (style.css)
-│   ├── js/             # Logic ứng dụng (app.js, admin.js, exam.js)
+│   ├── js/             # app.js (tiện ích, Supabase), question-types.js (registry dạng câu), admin.js, exam.js
 │   └── vendor/         # Thư viện tĩnh KaTeX (katex.min.js, css, fonts)
 ├── server.js           # Máy chủ Node.js phục vụ static files & chặn path traversal
 ├── package.json        # Cấu hình dự án

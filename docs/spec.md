@@ -32,50 +32,49 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
   - Nhập tên tài khoản: Nếu nhập `admin`, hệ thống mới hiển thị ô nhập mật khẩu quản trị.
   - Mật khẩu mặc định: `admin@123`. Xác thực thành công lưu session bảo vệ trang quản trị.
 
-### 2.2. Nhập đề thi bằng JSON
-- Hỗ trợ nhập trực tiếp mảng câu hỏi hoặc đối tượng JSON chứa thông tin tiêu đề và thời lượng:
-```json
-{
-  "title": "Đề thi Toán 11 học kỳ 1",
-  "duration_minutes": 45,
-  "questions": [
-    {
-      "type": "single",
-      "question": "Tính giá trị của biểu thức $\\frac{1}{2} + \\frac{1}{4}$",
-      "options": [
-        { "text": "$\\frac{3}{4}$", "is_correct": true },
-        { "text": "$\\frac{2}{6}$", "is_correct": false },
-        { "text": "$1$", "is_correct": false }
-      ]
-    },
-    {
-      "type": "short",
-      "question": "Tính $\\sqrt{16} \\div 8$",
-      "answer_kind": "number",
-      "answers": ["1/2", "0.5", "0,5"]
-    }
-  ]
-}
-```
-- Tự động điền tiêu đề (`title`) và thời lượng (`duration_minutes`) vào các ô nhập liệu khi import JSON.
-- Cơ chế tự sửa dấu gạch chéo ngược LaTeX: Tự động nhân đôi dấu `\` trước các từ khóa toán học (như `\frac` thành `\\frac`, `\sqrt` thành `\\sqrt`) để chống lỗi ký tự điều khiển trong JSON parser.
-- Modal Quy tắc định dạng (`#rulesModal`): Hiển thị bảng tra cứu công thức KaTeX kèm nút sao chép mẫu định dạng tiện lợi.
+### 2.2. Bố cục Sidebar
+- Trang quản trị dùng sidebar trái gồm 3 mục: **Tạo đề thi**, **Định dạng cấu trúc đề**, **Kết quả & nhật ký**. Dưới 768px sidebar chuyển thành thanh ngang ở đầu trang.
 
-### 2.3. Tạo và Chỉnh sửa câu hỏi thủ công
-- Modal thêm/sửa câu hỏi (`#questionModal`):
-  - Hỗ trợ chuyển đổi giữa câu Trắc nghiệm (`type: single`) và Tự luận ngắn (`type: short`).
-  - Ô nhập nội dung câu hỏi kèm khung xem trước công thức KaTeX trực tiếp theo thời gian thực.
-  - Câu trắc nghiệm: Cho phép thêm từ 2 đến 6 phương án, chọn đáp án đúng bằng nút chọn radio.
-  - Câu tự luận ngắn: Chọn kiểu đáp án (Số hoặc Chữ), nhập danh sách các đáp án chấp nhận (mỗi dòng một đáp án). Với kiểu Số, tự động kiểm tra cú pháp hợp lệ bằng `parseNumber`.
-- Hỗ trợ Sửa hoặc Xóa từng câu hỏi trực tiếp trên danh sách xem trước (Preview).
-- Nút "Hủy đề đang nhập" giúp xóa trắng toàn bộ danh sách câu hỏi đang soạn thảo và đặt lại biểu mẫu.
+### 2.3. Dạng câu hỏi và Cấu trúc đề
+- Toàn bộ logic theo dạng câu (kiểm tra JSON, xem trước, form thêm/sửa, giao diện thí sinh, đọc đáp án, chấm điểm, hiển thị kết quả, quy tắc định dạng) nằm tập trung ở `public/js/question-types.js` (registry `QUESTION_TYPES`). Thêm dạng mới chỉ cần thêm 1 entry.
+- 5 dạng có sẵn:
 
-### 2.4. Xuất bản và Quản lý danh sách đề thi
+| `type` | Tên | Dữ liệu | Chấm |
+|---|---|---|---|
+| `single` | Trắc nghiệm | `options: [{text, is_correct}]`, 2–6 phương án, đúng 1 đáp án đúng | Đúng = đủ điểm câu |
+| `true_false` | Trắc nghiệm đúng sai | `statements: [{text, is_true}]`, đúng 4 ý | Thang THPT: đúng 1/2/3/4 ý = 0,1 / 0,25 / 0,5 / 1 × điểm câu |
+| `short_number` | Trắc nghiệm trả lời ngắn | `answer: "0,75"` (số, tối đa 4 ký tự) | So theo giá trị (`1/2` = `0,5`) |
+| `essay` | Tự luận (tự chấm) | `answers: [...]` các đáp án chấp nhận | Số: so theo giá trị. Chữ: bỏ hoa/thường, khoảng trắng thừa |
+| `essay_manual` | Tự luận (giáo viên chấm) | `solution` (tuỳ chọn) | Thí sinh làm trên giấy, giáo viên nhập điểm ở trang Kết quả |
+
+- Trường chung mọi câu: `question` (bắt buộc), `points` (điểm riêng), `image` (hình vẽ: link hoặc ảnh dán vào form, được nén và nhúng vào đề). Nội dung hỗ trợ `$...$`, `$$...$$`, xuống dòng `\n`, dòng bắt đầu `- ` là gạch đầu dòng.
+- Câu không có `type` được coi là `single`; câu `type: "short"` của đề cũ được đọc như `essay`.
+
+### 2.3b. Mẫu cấu trúc đề (Phần I, II, III...)
+- Trang **Định dạng cấu trúc đề** quản lý nhiều mẫu. Mỗi mẫu gồm các phần theo thứ tự, mỗi phần: dạng câu, số câu (0 = tuỳ ý), điểm mỗi câu. Hiển thị tổng điểm; tổng khác 10 thì quy về thang 10.
+- Mẫu có sẵn **Toán THPT 2025**: I. Trắc nghiệm 12 × 0,25 · II. Đúng sai 2 × 1 · III. Trả lời ngắn 4 × 0,5 · IV. Tự luận (giáo viên chấm) 3 × 1 = 10 điểm.
+- Mẫu lưu ở `app_settings` (key `exam_templates`); chưa có bảng thì tự lưu trên trình duyệt.
+- Câu hỏi lưu phẳng trong `exams.questions`, mỗi câu có `part` (chỉ số phần) và `points`. Số La Mã và lời dẫn từng phần ("Thí sinh trả lời từ câu 1 đến câu 12...") sinh tự động; mỗi phần đánh số lại từ Câu 1.
+- Điểm bài = tổng điểm đạt / tổng điểm tối đa × 10. Câu giáo viên chấm được đánh dấu `pending` cho tới khi có điểm.
+
+### 2.4. Nhập đề thi bằng JSON
+- Chọn mẫu cấu trúc, rồi dán JSON vào modal (không cần file): `{ "title", "duration_minutes", "parts": [{ "type", "questions": [...] }] }`. Vẫn nhận mảng câu hỏi phẳng (mỗi câu tự xếp vào phần cùng dạng). Tiêu đề và thời gian được tự điền.
+- Thiếu số câu so với mẫu vẫn cho nhập (báo lỗi theo phần, khoá xuất bản) để bổ sung bằng nút **+** của phần đó.
+- Tự sửa dấu `\` thiếu trước lệnh LaTeX (`\frac`, `\{`, `\,` → `\\frac`...) trước khi parse, nhưng giữ `\n` là xuống dòng.
+- Lỗi được báo theo từng câu ngay trong modal, kể cả câu thuộc dạng chưa có trong cấu trúc đề.
+- Modal **Quy tắc định dạng**: một khối văn bản duy nhất, sao chép bằng 1 nút. Sinh tự động từ mẫu đang chọn: các phần (số câu, điểm), khung JSON, quy tắc từng dạng, công thức toán, hướng dẫn chuyển từ đề PDF, JSON mẫu. Có thể dán khối này cùng file PDF đề vào ChatGPT/Claude để chuyển đề sang JSON.
+
+### 2.5. Danh sách câu sau khi import
+- Chỉ hiện sau khi đã import. Câu hỏi nhóm theo phần, có tiêu đề PHẦN I, II... kèm lời dẫn và số câu/yêu cầu; có nút **Huỷ import**.
+- Mỗi câu có nút Sửa / Xoá. Cuối mỗi phần là nút **＋** để thêm câu thủ công vào phần đó (form theo dạng, xem trước KaTeX, chọn/dán hình vẽ, điểm câu).
+- Câu hỏi chỉ nằm trong bộ nhớ trình duyệt, không lưu file. Nút xuất bản bị khoá khi còn lỗi.
+
+### 2.6. Xuất bản và Quản lý danh sách đề thi
 - Xuất bản đề thi lên Supabase: Lưu thông tin đề thi và toàn bộ mảng câu hỏi có cấu trúc vào bảng `exams`.
 - Danh sách đề thi đã tạo: Hiển thị mã đề, tên đề thi, thời gian làm bài, ngày tạo.
 - Xóa cứng đề thi: Cung cấp nút "Xóa" cho từng đề thi trong danh sách. Khi quản trị viên xác nhận, hệ thống gửi lệnh `DELETE` trực tiếp lên Supabase để xóa vĩnh viễn đề thi khỏi cơ sở dữ liệu.
 
-### 2.5. Theo dõi kết quả và Nhật ký thao tác (Audit Logs)
+### 2.7. Theo dõi kết quả và Nhật ký thao tác (Audit Logs)
 - Danh sách kết quả nộp bài: Hiển thị tên thí sinh, điểm số (/10), tổng số câu hỏi, thời lượng làm bài thực tế, thời điểm nộp bài.
 - Modal xem chi tiết kết quả:
   - Chi tiết từng câu trả lời của thí sinh (câu trắc nghiệm hiển thị phương án chọn, câu tự luận hiển thị giá trị điền) kèm đánh giá Đúng/Sai.
@@ -94,12 +93,15 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
 ### 3.2. Quá trình làm bài thi
 - Kích hoạt Kiosk Mode: Trên ứng dụng Android, gọi `window.KioskBridge.startLock()` để khóa phím cứng, thanh thông báo và cử chỉ. Trên trình duyệt web, tự động bật chế độ toàn màn hình.
 - Hiển thị nội dung câu hỏi và công thức toán học: Mọi công thức KaTeX trong đề bài và các phương án đều được hiển thị sắc nét bằng engine KaTeX tĩnh.
-- Câu trắc nghiệm (`single`): Giao diện phương án dạng nút cảm ứng lớn, đổi màu xanh khi chọn.
-- Câu tự luận ngắn (`short`):
-  - Hiển thị ô nhập văn bản (kích hoạt `inputmode="decimal"` nếu là kiểu Số).
-  - Khung xem trước KaTeX trực tiếp bên dưới ô nhập giúp thí sinh kiểm tra lại cách hiển thị đáp án.
-  - Kiểm tra tính hợp lệ trực tiếp (Debounce 300ms): Nếu là kiểu Số, kiểm tra bằng hàm `parseNumber`. Nếu sai định dạng (ví dụ nhập `3//4`), viền đỏ cảnh báo và không tính vào số câu đã trả lời.
-  - Chấm điểm số tương đương: Tự động công nhận các dạng biểu diễn tương đương của cùng một số (ví dụ: `3/4` = `0.75` = `0,75` = `6/8`).
+- Mỗi dạng câu được hiển thị bằng `renderExam` của registry:
+  - Trắc nghiệm: nút phương án cảm ứng lớn.
+  - Đúng sai: bảng 4 ý, mỗi ý bấm Đ hoặc S.
+  - Tự luận / Trả lời ngắn: ô nhập (bàn phím số nếu đáp án là số; trả lời ngắn giới hạn 4 ký tự).
+- Kiểm tra định dạng trực tiếp (debounce 300ms): gõ sai định dạng số (vd `3//4`) thì viền đỏ, hiện cảnh báo và câu đó không tính là đã trả lời. Khi nộp bài, hộp xác nhận liệt kê các câu đang sai định dạng.
+- Lưới điều hướng câu chia theo phần (I: 1–12, II: 1–2...), tô xanh câu đã làm, đỏ câu sai định dạng, nét đứt câu tự luận giấy. Mỗi câu hiển thị tiêu đề phần và lời dẫn như đề giấy.
+- Trả lời ngắn dùng ô "Đáp án" 4 ký tự kiểu phiếu thi. Câu tự luận (giáo viên chấm): chỉ hiện đề, thí sinh làm trên giấy.
+- Nộp bài khi còn câu tự luận: màn hình khoá hiện điểm phần chấm tự động (vd `2,25 / 7`) và báo phần chờ giáo viên chấm.
+- Nút **Đăng xuất** chỉ hiện ở màn danh sách đề, ẩn khi đang làm bài.
 - Lưu trữ nháp an toàn (Offline Draft): Mọi thao tác làm bài được lưu tự động vào `localStorage` kèm mốc thời hạn `deadline`. Nếu bị tắt nguồn hoặc tải lại trang, bài làm và thời gian còn lại sẽ được khôi phục nguyên vẹn.
 - Bộ đếm thời gian: Tính toán chính xác theo mốc deadline tuyệt đối (`deadline - Date.now()`), không bị ảnh hưởng khi tab trình duyệt bị throttle trong nền.
 
@@ -142,6 +144,15 @@ create table if not exists exam_results (
   answers jsonb default '[]'::jsonb,
   action_logs jsonb default '[]'::jsonb,
   submitted_at timestamp with time zone default now()
+);
+```
+- `answers`: mảng `{question_index, part, type, answer, points, max, pending}`. Câu giáo viên chấm có `points: null, pending: true` cho tới khi giáo viên nhập điểm (cần policy UPDATE trên `exam_results`, xem `schema.sql`).
+
+### 4.3. Bảng `app_settings` (Cấu hình hệ thống)
+```sql
+create table app_settings (
+  key text primary key,          -- vd: 'exam_templates'
+  value jsonb not null           -- vd: [{ "id", "name", "parts": [{ "type", "count", "points" }] }]
 );
 ```
 

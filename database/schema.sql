@@ -31,3 +31,21 @@ drop policy if exists "Allow read exam_results" on exam_results;
 create policy "Allow read exam_results" on exam_results for select using (true);
 drop policy if exists "Allow insert exam_results" on exam_results;
 create policy "Allow insert exam_results" on exam_results for insert with check (true);
+-- Cho phep giao vien luu diem tu luan (cham tay) vao bai da nop
+drop policy if exists "Allow update exam_results" on exam_results;
+create policy "Allow update exam_results" on exam_results for update using (true);
+
+-- Cau hinh he thong (vd: key 'exam_templates' = cac mau cau truc de Phan I, II, III...)
+create table if not exists app_settings (
+  key text primary key,
+  value jsonb not null
+);
+
+alter table app_settings enable row level security;
+drop policy if exists "Allow read app_settings" on app_settings;
+create policy "Allow read app_settings" on app_settings for select using (true);
+drop policy if exists "Allow insert app_settings" on app_settings;
+create policy "Allow insert app_settings" on app_settings for insert with check (true);
+drop policy if exists "Allow update app_settings" on app_settings;
+create policy "Allow update app_settings" on app_settings for update using (true);
+

@@ -3,366 +3,228 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quan tri - Safe Exam</title>
-  <link rel="stylesheet" href="css/style.css">
+  <title>Quản trị - Safe Exam</title>
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
-  <script src="vendor/katex/katex.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="app-header">
-    <div class="brand-title">Safe Exam - Bang quan tri</div>
-    <div style="display: flex; gap: 8px;">
-      <button onclick="logoutAdmin()" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Dang xuat</button>
-    </div>
+    <div class="brand-title">Safe Exam - Bảng quản trị</div>
+    <button onclick="logoutAdmin()" class="btn btn-outline btn-sm">Đăng xuất</button>
   </header>
 
-  <main class="container" style="padding-top: 24px; padding-bottom: 60px;">
-    <!-- Thanh chon Tab -->
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('tabUpload')">Tao va Quan ly de thi</button>
-      <button class="tab-btn" onclick="switchTab('tabResults')">Ket qua va Nhat ky thao tac</button>
-    </div>
+  <div class="admin-layout">
+    <nav class="sidebar">
+      <button class="sidebar-item active" data-page="pageCreate" onclick="showPage('pageCreate')">Tạo đề thi</button>
+      <button class="sidebar-item" data-page="pageStructure" onclick="showPage('pageStructure')">Định dạng cấu trúc đề</button>
+      <button class="sidebar-item" data-page="pageResults" onclick="showPage('pageResults')">Kết quả &amp; nhật ký</button>
+    </nav>
 
-    <!-- TAB 1: Tao & Quan ly de thi -->
-    <div id="tabUpload">
-      <div class="card">
-        <h2 style="margin-bottom: 8px;">Tao de thi moi</h2>
-        <p style="margin-bottom: 16px;">Nhap de thi bang cach dan JSON hoac soan truc tiep. Ho tro day du cong thuc toan hoc KaTeX.</p>
+    <main class="admin-main">
+      <!-- TRANG 1: Tao de thi -->
+      <section id="pageCreate" class="page">
+        <div class="card">
+          <h2 style="margin-bottom: 16px;">Tạo đề thi mới</h2>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
-          <div class="form-group">
-            <label class="form-label" for="examTitle">Tieu de de thi</label>
-            <input type="text" id="examTitle" class="form-control" placeholder="Vi du: Kiem tra Toan hoc ki 1" required>
+          <div class="grid-3">
+            <div class="form-group">
+              <label class="form-label" for="examTitle">Tiêu đề đề thi</label>
+              <input type="text" id="examTitle" class="form-control" placeholder="Ví dụ: Kiểm tra giữa kì I - Toán 11">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="examDuration">Thời gian (phút)</label>
+              <input type="number" id="examDuration" class="form-control" value="45" min="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="examTemplate">Cấu trúc đề</label>
+              <select id="examTemplate" class="form-control" onchange="onTemplateChange()"></select>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="examDuration">Thoi gian lam bai (phut)</label>
-            <input type="number" id="examDuration" class="form-control" value="45" min="1" required>
-          </div>
-        </div>
+          <div id="templateSummary" class="chip-row" style="margin: -4px 0 14px;"></div>
 
-        <!-- Hang nut chuc nang -->
-        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-          <button type="button" class="btn btn-primary" onclick="openJsonModal()">Nhap JSON</button>
-          <button type="button" class="btn btn-outline" onclick="openRulesModal()">Quy tac dinh dang</button>
-          <button type="button" class="btn btn-outline" onclick="openAddQuestionModal()">+ Them cau thu cong</button>
-          <button type="button" id="btnCancelImport" class="btn btn-outline" style="display: none; color: var(--danger); border-color: #fca5a5;" onclick="cancelImport()">Huy de dang nhap</button>
-        </div>
-
-        <div id="uploadStatus" style="display: none; padding: 10px; margin-bottom: 14px;" class="alert-box alert-info"></div>
-
-        <!-- Khung xem truoc cau hoi -->
-        <div id="previewSection" style="display: none;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3>Danh sach cau hoi (<span id="previewCount">0</span> cau)</h3>
+          <div class="btn-row">
+            <button type="button" class="btn btn-primary" onclick="openJsonModal()">Nhập JSON</button>
+            <button type="button" class="btn btn-outline" onclick="openRulesModal()">Quy tắc định dạng</button>
           </div>
 
-          <div id="previewWarnings" class="alert-box alert-danger" style="display: none; padding: 10px; margin-bottom: 12px; font-size: 0.85rem;"></div>
+          <div id="uploadStatus" class="alert-box alert-info" style="display: none;"></div>
 
-          <div id="previewList" style="max-height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;"></div>
-
-          <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px;" onclick="saveExam()">Xuat ban de thi len he thong</button>
-        </div>
-      </div>
-
-      <!-- Danh sach de thi hien co -->
-      <div class="card" style="margin-top: 24px;">
-        <h3 style="margin-bottom: 12px;">Cac de thi da tao</h3>
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Tieu de de thi</th>
-                <th>Thoi gian</th>
-                <th>Ngay tao</th>
-                <th>Thao tac</th>
-              </tr>
-            </thead>
-            <tbody id="examTableBody">
-              <tr>
-                <td colspan="5" style="text-align: center;">Dang tai danh sach...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 2: Ket qua & Nhat ky thao tac (Audit Logs) -->
-    <div id="tabResults" style="display: none;">
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-          <div>
-            <h2>Ket qua va Nhat ky bai lam</h2>
-            <p>Theo doi chi tiet diem so va tung hanh vi thao tac cua thi sinh sau khi nop bai.</p>
+          <!-- Danh sach cau hoi theo phan: chi hien sau khi import -->
+          <div id="previewSection" style="display: none;">
+            <div class="preview-head">
+              <h3>Đề thi (<span id="previewCount">0</span> câu · <span id="previewPoints">0</span> điểm)</h3>
+              <button type="button" class="btn btn-outline btn-sm btn-danger-outline" onclick="cancelImport()">Huỷ import</button>
+            </div>
+            <div id="previewErrors" class="alert-box alert-danger" style="display: none;"></div>
+            <div id="previewList"></div>
+            <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px; margin-top: 16px;" onclick="saveExam()">Xuất bản đề thi lên hệ thống</button>
           </div>
-          <button class="btn btn-outline" onclick="loadResults()">Lam moi</button>
         </div>
 
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Thi sinh</th>
-                <th>Diem so</th>
-                <th>So cau dung</th>
-                <th>Thoi luong</th>
-                <th>Thoi diem nop</th>
-                <th>Chi tiet</th>
-              </tr>
-            </thead>
-            <tbody id="resultsTableBody">
-              <tr>
-                <td colspan="7" style="text-align: center;">Dang tai du lieu...</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 12px;">Các đề thi đã tạo</h3>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>ID</th><th>Tiêu đề</th><th>Thời gian</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead>
+              <tbody id="examTableBody"><tr><td colspan="5" style="text-align: center;">Đang tải danh sách...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRANG 2: Mau cau truc de -->
+      <section id="pageStructure" class="page" hidden>
+        <div class="card">
+          <h2 style="margin-bottom: 8px;">Định dạng cấu trúc đề</h2>
+          <p style="margin-bottom: 12px;">Mỗi mẫu gồm các phần (I, II, III...), mỗi phần là một dạng câu với số câu và điểm mỗi câu. Khi tạo đề, chọn mẫu để kiểm tra JSON và sinh quy tắc định dạng.</p>
+          <div id="structureLocalNote" class="field-hint" style="display: none; margin-bottom: 12px;">
+            Đang lưu mẫu trên trình duyệt này. Muốn dùng chung cho mọi máy admin, chạy <code>database/schema.sql</code> trên Supabase (bảng <code>app_settings</code>).
+          </div>
+
+          <div class="chip-row" id="templateTabs" style="margin-bottom: 14px;"></div>
+
+          <div class="tpl-editor">
+            <div class="form-group">
+              <label class="form-label" for="tplName">Tên mẫu</label>
+              <input type="text" id="tplName" class="form-control">
+            </div>
+            <div class="table-responsive">
+              <table class="tpl-table">
+                <thead><tr><th>Phần</th><th>Dạng câu</th><th>Số câu <small>(0 = tuỳ ý)</small></th><th>Điểm / câu</th><th>Cộng</th><th></th></tr></thead>
+                <tbody id="tplParts"></tbody>
+              </table>
+            </div>
+            <div class="preview-head" style="margin-top: 10px;">
+              <button type="button" class="btn btn-outline btn-sm" onclick="addTemplatePart()">+ Thêm phần</button>
+              <strong id="tplTotal"></strong>
+            </div>
+            <div class="btn-row" style="margin-top: 14px;">
+              <button class="btn btn-primary" onclick="saveTemplate()">Lưu mẫu</button>
+              <button class="btn btn-outline btn-danger-outline" onclick="deleteTemplate()">Xoá mẫu</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom: 12px;">Các dạng câu có sẵn</h3>
+          <div id="typeCards" class="type-grid"></div>
+        </div>
+      </section>
+
+      <!-- TRANG 3: Ket qua & nhat ky -->
+      <section id="pageResults" class="page" hidden>
+        <div class="card">
+          <div class="preview-head">
+            <div>
+              <h2>Kết quả và nhật ký bài làm</h2>
+              <p>Điểm số, chấm tự luận và từng thao tác của thí sinh.</p>
+            </div>
+            <button class="btn btn-outline" onclick="loadResults()">Làm mới</button>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>ID</th><th>Thí sinh</th><th>Điểm</th><th>Trạng thái</th><th>Thời lượng</th><th>Thời điểm nộp</th><th>Chi tiết</th></tr></thead>
+              <tbody id="resultsTableBody"><tr><td colspan="7" style="text-align: center;">Đang tải dữ liệu...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: Quy tac dinh dang (1 khoi, 1 nut sao chep) -->
+  <div id="rulesModal" class="overlay" style="display: none; z-index: 130;">
+    <div class="lock-screen modal-wide">
+      <div class="modal-head">
+        <h3>Quy tắc định dạng</h3>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary btn-sm" onclick="copyText(document.getElementById('rulesText').textContent, this)">Sao chép</button>
+          <button class="btn btn-outline btn-sm" onclick="closeModal('rulesModal')">Đóng</button>
         </div>
       </div>
-    </div>
-  </main>
-
-  <!-- Modal 1: Quy tac dinh dang & Cong thuc Toan -->
-  <div id="rulesModal" class="overlay" style="display: none; z-index: 120;">
-    <div class="lock-screen" style="max-width: 760px; text-align: left; max-height: 85vh; overflow-y: auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-        <h3>Quy tac dinh dang va Cong thuc Toan</h3>
-        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeRulesModal()">Dong</button>
-      </div>
-
-      <!-- 1. Mau JSON kem tieu de va thoi gian -->
-      <div style="margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <strong>1. Mau JSON chuan (kem tieu de, thoi gian, trac nghiem va tu luan)</strong>
-          <button id="btnCopyJsonSample" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" onclick="copySampleText('jsonSampleCode', 'btnCopyJsonSample')">Sao chep</button>
-        </div>
-        <pre id="jsonSampleCode" class="code-block">{
-  "title": "Kiem tra Toan hoc ki 1",
-  "duration_minutes": 45,
-  "questions": [
-    {
-      "type": "single",
-      "question": "Ket qua cua $\\frac{1}{2} + \\frac{1}{4}$ la gi?",
-      "options": [
-        { "text": "$\\frac{3}{4}$", "is_correct": true },
-        { "text": "$\\frac{2}{6}$", "is_correct": false },
-        { "text": "$1$", "is_correct": false },
-        { "text": "$\\frac{1}{8}$", "is_correct": false }
-      ]
-    },
-    {
-      "type": "short",
-      "question": "Tinh gia tri cua $\\sqrt{16} \\div 8$",
-      "answer_kind": "number",
-      "answers": ["1/2", "0.5", "0,5"]
-    },
-    {
-      "type": "short",
-      "question": "Thu do cua Viet Nam la gi?",
-      "answer_kind": "text",
-      "answers": ["Ha Noi", "Hà Nội"]
-    }
-  ]
-}</pre>
-      </div>
-
-      <!-- 2. Bang cong thuc toan hoc -->
-      <div style="margin-bottom: 20px;">
-        <strong>2. Bang tra cuu Cong thuc Toan hoc KaTeX</strong>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;">
-          Viet cong thuc trong cap dau <code>$...$</code> cho dang inline hoac <code>$$...$$</code> cho dang khoi o giua dong.
-        </p>
-        <div class="table-responsive" style="border: 1px solid var(--border); border-radius: var(--radius);">
-          <table class="math-table">
-            <thead>
-              <tr>
-                <th>Y nghia</th>
-                <th>Cach viet trong JSON</th>
-                <th>Ket qua hien thi</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Phan so</td>
-                <td><code>$\\frac{a}{b}$</code></td>
-                <td class="katex-cell" data-tex="\frac{a}{b}"></td>
-              </tr>
-              <tr>
-                <td>Hon so</td>
-                <td><code>$2\\frac{1}{3}$</code></td>
-                <td class="katex-cell" data-tex="2\frac{1}{3}"></td>
-              </tr>
-              <tr>
-                <td>Can bac hai</td>
-                <td><code>$\\sqrt{x}$</code></td>
-                <td class="katex-cell" data-tex="\sqrt{x}"></td>
-              </tr>
-              <tr>
-                <td>Can bac ba</td>
-                <td><code>$\\sqrt[3]{x}$</code></td>
-                <td class="katex-cell" data-tex="\sqrt[3]{x}"></td>
-              </tr>
-              <tr>
-                <td>Luy thua (mu)</td>
-                <td><code>$x^{2}$</code></td>
-                <td class="katex-cell" data-tex="x^{2}"></td>
-              </tr>
-              <tr>
-                <td>Chi so duoi</td>
-                <td><code>$a_{n}$</code></td>
-                <td class="katex-cell" data-tex="a_{n}"></td>
-              </tr>
-              <tr>
-                <td>Nhan va Chia</td>
-                <td><code>$a \\times b \\div c$</code></td>
-                <td class="katex-cell" data-tex="a \times b \div c"></td>
-              </tr>
-              <tr>
-                <td>So sanh</td>
-                <td><code>$x \\le 5, y \\ge 3, a \\neq b$</code></td>
-                <td class="katex-cell" data-tex="x \le 5, y \ge 3, a \neq b"></td>
-              </tr>
-              <tr>
-                <td>So Pi va Do</td>
-                <td><code>$\\pi, 90^\\circ$</code></td>
-                <td class="katex-cell" data-tex="\pi, 90^\circ"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 3. Luu y quan trong -->
-      <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
-        <strong style="color: var(--text-main);">Luu y ve dinh dang:</strong>
-        <ul style="padding-left: 20px; margin-top: 4px;">
-          <li><strong>Dau gach cheo nguoc trong JSON:</strong> Hay viet hai dau gach cheo <code>\\frac</code> thay vi mot dau. He thong cung co bo loc tu dong sua neu ban quen.</li>
-          <li><strong>Cau tu luan so (number):</strong> Thi sinh duoc phep go cac dang tuong duong nhu so nguyen, thap phan (dau <code>.</code> hoac <code>,</code>), phan so <code>a/b</code> hoac hon so <code>2 1/3</code>. He thong se tu dong quy doi va tinh dung.</li>
-          <li><strong>Ky tu $ thong thuong:</strong> Neu muon ghi ky tu do la that khong phai toan hoc, hay viet <code>\$</code>.</li>
-        </ul>
-      </div>
+      <pre id="rulesText" class="code-block"></pre>
     </div>
   </div>
 
-  <!-- Modal 2: Nhap JSON truc tiep -->
+  <!-- Modal: Nhap JSON -->
   <div id="jsonModal" class="overlay" style="display: none; z-index: 120;">
-    <div class="lock-screen" style="max-width: 660px; text-align: left;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-        <h3>Nhap cau hoi tu JSON</h3>
-        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeJsonModal()">Dong</button>
+    <div class="lock-screen modal-wide">
+      <div class="modal-head">
+        <h3>Nhập đề từ JSON</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('jsonModal')">Đóng</button>
       </div>
-
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
-        Dan noi dung JSON vao o ben duoi. He thong se tu dong dien tieu de va thoi gian lam bai neu co trong JSON.
-        (<a href="#" onclick="openRulesModal(); return false;">Xem mau JSON</a>)
-      </p>
-
-      <textarea id="jsonInputArea" class="form-control" rows="11" placeholder='{\n  "title": "Kiem tra Toan",\n  "duration_minutes": 45,\n  "questions": [...]\n}'></textarea>
-
-      <div id="jsonImportModeRow" style="margin-top: 10px; display: none; font-size: 0.85rem;">
-        <label style="margin-right: 14px; cursor: pointer;">
-          <input type="radio" name="jsonImportMode" value="replace" checked> Thay the danh sach hien tai
-        </label>
-        <label style="cursor: pointer;">
-          <input type="radio" name="jsonImportMode" value="append"> Noi them vao danh sach hien tai
-        </label>
+      <textarea id="jsonInputArea" class="form-control" rows="12" placeholder='{ "title": "...", "duration_minutes": 90, "parts": [ ... ] }'></textarea>
+      <div id="jsonImportModeRow" class="radio-row" style="display: none;">
+        <label><input type="radio" name="jsonImportMode" value="replace" checked> Thay thế đề hiện tại</label>
+        <label><input type="radio" name="jsonImportMode" value="append"> Nối thêm vào đề</label>
       </div>
-
-      <div id="jsonModalError" class="alert-box alert-danger" style="display: none; margin-top: 10px; padding: 8px; font-size: 0.85rem;"></div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
-        <button class="btn btn-outline" onclick="closeJsonModal()">Huy</button>
-        <button class="btn btn-primary" onclick="submitJsonModal()">Nhap de thi</button>
+      <div id="jsonModalError" class="alert-box alert-danger" style="display: none; margin-top: 10px;"></div>
+      <div class="modal-foot">
+        <a href="#" onclick="openRulesModal(); return false;">Xem quy tắc định dạng</a>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-outline" onclick="closeModal('jsonModal')">Huỷ</button>
+          <button class="btn btn-primary" onclick="submitJsonModal()">Nhập đề thi</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal 3: Them hoac Sua cau hoi thu cong -->
+  <!-- Modal: Them / sua cau hoi -->
   <div id="questionModal" class="overlay" style="display: none; z-index: 120;">
-    <div class="lock-screen" style="max-width: 680px; text-align: left; max-height: 85vh; overflow-y: auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-        <h3 id="questionModalTitle">Them cau hoi thu cong</h3>
-        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeQuestionModal()">Dong</button>
+    <div class="lock-screen modal-wide">
+      <div class="modal-head">
+        <h3 id="questionModalTitle">Thêm câu hỏi</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('questionModal')">Đóng</button>
       </div>
-
       <div class="form-group">
-        <label class="form-label">Loai cau hoi</label>
-        <div style="display: flex; gap: 16px; margin-top: 4px;">
-          <label style="cursor: pointer;">
-            <input type="radio" name="modalQType" value="single" checked onchange="toggleQuestionType()"> Trac nghiem
-          </label>
-          <label style="cursor: pointer;">
-            <input type="radio" name="modalQType" value="short" onchange="toggleQuestionType()"> Tu luan ngan
-          </label>
-        </div>
+        <label class="form-label" for="modalQText">Nội dung câu hỏi (công thức $...$, xuống dòng bằng Enter, "- " để gạch đầu dòng)</label>
+        <textarea id="modalQText" class="form-control" rows="4" oninput="updateModalMathPreview()"></textarea>
+        <div class="math-preview" id="modalQMathPreview"></div>
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Noi dung cau hoi (co the dung KaTeX $...$)</label>
-        <textarea id="modalQText" class="form-control" rows="3" placeholder="Vi du: Tinh gia tri $\frac{1}{2} + 1$" oninput="updateModalMathPreview()"></textarea>
-        <div class="math-preview" id="modalQMathPreview">Xem truoc cong thuc se hien o day...</div>
-      </div>
-
-      <!-- Khu vuc cau hoi Trac nghiem -->
-      <div id="singleOptionsArea">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <label class="form-label" style="margin-bottom: 0;">Cac phuong an va chon dap an dung</label>
-          <button type="button" class="btn btn-outline" style="padding: 2px 8px; font-size: 0.8rem;" onclick="addModalOptionRow()">+ Them phuong an</button>
-        </div>
-        <div id="modalOptionsList"></div>
-      </div>
-
-      <!-- Khu vuc cau hoi Tu luan ngan -->
-      <div id="shortOptionsArea" style="display: none;">
+      <div class="grid-2">
         <div class="form-group">
-          <label class="form-label">Dinh dang dap an</label>
-          <div style="display: flex; gap: 16px; margin-top: 4px;">
-            <label style="cursor: pointer;">
-              <input type="radio" name="modalShortKind" value="number" checked> So (tu dong cham tuong duong 3/4 = 0.75)
-            </label>
-            <label style="cursor: pointer;">
-              <input type="radio" name="modalShortKind" value="text"> Chu (so sanh chuoi van ban)
-            </label>
+          <label class="form-label">Hình vẽ (chọn file hoặc dán ảnh Ctrl+V)</label>
+          <input type="file" id="modalQImageFile" accept="image/*" class="form-control" onchange="onImagePicked(this.files[0]); this.value='';">
+          <div id="modalQImageBox" class="q-image-edit" style="display: none;">
+            <img id="modalQImage" alt="Hình vẽ">
+            <button type="button" class="btn btn-outline btn-sm btn-danger-outline" onclick="setModalImage('')">Xoá hình</button>
           </div>
         </div>
-
         <div class="form-group">
-          <label class="form-label">Cac dap an chap nhan (Moi dong mot dap an)</label>
-          <textarea id="modalShortAnswers" class="form-control" rows="3" placeholder="Vi du:&#10;1/2&#10;0.5&#10;0,5"></textarea>
+          <label class="form-label" for="modalQPoints">Điểm của câu</label>
+          <input type="number" id="modalQPoints" class="form-control" min="0" step="0.05">
         </div>
       </div>
-
-      <div id="modalQError" class="alert-box alert-danger" style="display: none; margin-top: 10px; padding: 8px; font-size: 0.85rem;"></div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
-        <button class="btn btn-outline" onclick="closeQuestionModal()">Huy</button>
-        <button class="btn btn-primary" onclick="saveQuestionModal()">Luu cau hoi</button>
+      <div id="modalTypeEditor" class="form-group"></div>
+      <div id="modalQError" class="alert-box alert-danger" style="display: none;"></div>
+      <div class="modal-foot" style="justify-content: flex-end;">
+        <button class="btn btn-outline" onclick="closeModal('questionModal')">Huỷ</button>
+        <button class="btn btn-primary" onclick="saveQuestionModal()">Lưu câu hỏi</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal 4: Xem chi tiet bai lam va Nhat ky thao tac -->
+  <!-- Modal: Chi tiet bai lam + cham tu luan -->
   <div id="detailModal" class="overlay" style="display: none;">
-    <div class="lock-screen" style="max-width: 680px; text-align: left; max-height: 85vh; overflow-y: auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-        <h3 id="modalTitle">Chi tiet bai lam</h3>
-        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeDetailModal()">Dong</button>
+    <div class="lock-screen modal-wide">
+      <div class="modal-head">
+        <h3 id="modalTitle">Chi tiết bài làm</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('detailModal')">Đóng</button>
       </div>
-
-      <div style="margin-bottom: 16px;">
-        <h4 style="margin-bottom: 8px;">1. Ket qua cau hoi</h4>
-        <div id="modalAnswersList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem;"></div>
+      <h4 style="margin-bottom: 8px;">1. Kết quả từng câu</h4>
+      <div id="modalAnswersList" class="scroll-box" style="max-height: 360px;"></div>
+      <div id="gradeBar" class="preview-head" style="display: none; margin-top: 10px;">
+        <span class="field-hint">Nhập điểm các câu tự luận rồi bấm Lưu.</span>
+        <button class="btn btn-primary btn-sm" onclick="saveManualGrades()">Lưu điểm tự luận</button>
       </div>
-
-      <div>
-        <h4 style="margin-bottom: 8px;">2. Nhat ky thao tac trong luc lam bai (Action Logs)</h4>
-        <div id="modalLogsList" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem; background: #f8fafc;"></div>
-      </div>
+      <h4 style="margin: 16px 0 8px;">2. Nhật ký thao tác (Action Logs)</h4>
+      <div id="modalLogsList" class="scroll-box" style="max-height: 240px; background: #f8fafc;"></div>
     </div>
   </div>
 
+  <script src="vendor/katex/katex.min.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/question-types.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

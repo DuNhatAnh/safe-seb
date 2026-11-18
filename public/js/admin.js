@@ -1,17 +1,31 @@
-let parsedQuestions = [];
+// Dieu phoi UI admin. Logic dang cau + cau truc de nam o question-types.js.
+let parsedQuestions = [];   // Cau hoi phang (co part, points), chi giu trong bo nho
 let allResultsData = [];
-let editingQuestionIndex = null; // null: them moi, number: dang sua cau tai index
+let templates = clone(DEFAULT_TEMPLATES);
+let editingTplId = null;    // mau dang sua o trang cau truc
+let editing = null;         // { index | null, part } cau dang sua trong modal
+let modalImage = "";        // anh (data URL / link) cua cau dang sua
+let detailIndex = null;     // ket qua dang xem
+let detailExam = null;      // de thi cua ket qua dang xem (de hien noi dung cau tu luan)
 
-window.addEventListener("DOMContentLoaded", () => {
-  // Kiem tra xac thuc quan tri vien
+function clone(v) { return JSON.parse(JSON.stringify(v)); }
+
+window.addEventListener("DOMContentLoaded", async () => {
   if (sessionStorage.getItem("safe_exam_admin_auth") !== "true") {
-    alert("Vui long dang nhap tai khoan quan tri!");
+    alert("Vui lòng đăng nhập tài khoản quản trị!");
     window.location.href = "index.html";
     return;
   }
-
+  await loadTemplates();
   loadExistingExams();
   loadResults();
+
+  // Dan anh truc tiep (Ctrl+V) khi dang mo modal cau hoi
+  document.addEventListener("paste", e => {
+    if (document.getElementById("questionModal").style.display !== "flex") return;
+    const file = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/"));
+    if (file) { e.preventDefault(); onImagePicked(file); }
+  });
 });
 
 function logoutAdmin() {
@@ -19,625 +33,526 @@ function logoutAdmin() {
   window.location.href = "index.html";
 }
 
-// Chuyen doi Tab
-function switchTab(tabId) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  document.getElementById("tabUpload").style.display = "none";
-  document.getElementById("tabResults").style.display = "none";
+function showPage(pageId) {
+  document.querySelectorAll(".page").forEach(p => { p.hidden = p.id !== pageId; });
+  document.querySelectorAll(".sidebar-item").forEach(b => b.classList.toggle("active", b.dataset.page === pageId));
+  if (pageId === "pageCreate") loadExistingExams();
+  if (pageId === "pageStructure") renderStructurePage();
+  if (pageId === "pageResults") loadResults();
+}
 
-  if (tabId === "tabUpload") {
-    document.querySelectorAll(".tab-btn")[0].classList.add("active");
-    document.getElementById("tabUpload").style.display = "block";
-    loadExistingExams();
-  } else {
-    document.querySelectorAll(".tab-btn")[1].classList.add("active");
-    document.getElementById("tabResults").style.display = "block";
-    loadResults();
+function showErrorList(boxId, title, errors) {
+  const box = document.getElementById(boxId);
+  box.innerHTML = (title ? `<strong>${escapeHtml(title)}</strong><br>` : "") + errors.map(e => `- ${escapeHtml(e)}`).join("<br>");
+  box.style.display = errors.length ? "block" : "none";
+}
+
+// =================================================== MAU CAU TRUC DE
+async function loadTemplates() {
+  const saved = await SettingsService.get("exam_templates");
+  const valid = Array.isArray(saved)
+    ? saved.filter(t => t && t.id && Array.isArray(t.parts) && t.parts.length && t.parts.every(p => QUESTION_TYPES[p.type]))
+    : [];
+  if (valid.length) templates = valid;
+  renderTemplateSelect();
+}
+
+function currentTemplate() {
+  const id = document.getElementById("examTemplate").value;
+  return templates.find(t => t.id === id) || templates[0];
+}
+
+function templateChips(t) {
+  return t.parts.map((p, i) => `<span class="chip">${ROMAN[i]}. ${escapeHtml(QUESTION_TYPES[p.type].label)}: ${p.count || "tuỳ ý"} câu × ${fmtNum(p.points)}đ</span>`).join("");
+}
+
+function renderTemplateSelect() {
+  const select = document.getElementById("examTemplate");
+  const keep = select.value;
+  select.innerHTML = templates.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join("");
+  if (templates.some(t => t.id === keep)) select.value = keep;
+  document.getElementById("templateSummary").innerHTML = templateChips(currentTemplate());
+}
+
+function onTemplateChange() {
+  document.getElementById("templateSummary").innerHTML = templateChips(currentTemplate());
+  if (parsedQuestions.length) {
+    parsedQuestions = normalizeExam(parsedQuestions.map(q => ({ ...q, part: undefined })), currentTemplate()).questions;
+    renderPreview();
   }
 }
 
-// 1. Modal Quy tac dinh dang
+// ---- Trang "Dinh dang cau truc de"
+function renderStructurePage() {
+  document.getElementById("structureLocalNote").style.display = SettingsService.isLocal ? "block" : "none";
+  if (!templates.some(t => t.id === editingTplId)) editingTplId = templates[0]?.id;
+
+  document.getElementById("templateTabs").innerHTML = templates.map(t => `
+    <button class="chip chip-btn ${t.id === editingTplId ? "active" : ""}" onclick="selectTemplate('${escapeHtml(t.id)}')">${escapeHtml(t.name)}</button>`).join("")
+    + '<button class="chip chip-btn" onclick="newTemplate()">+ Tạo mẫu mới</button>';
+
+  const t = templates.find(x => x.id === editingTplId);
+  document.getElementById("tplName").value = t.name;
+  renderTemplateParts(clone(t.parts));
+
+  document.getElementById("typeCards").innerHTML = Object.entries(QUESTION_TYPES).map(([id, type]) => `
+    <div class="type-card">
+      <div class="type-card-head"><div><strong>${escapeHtml(type.label)}</strong> <code>${id}</code></div></div>
+      <p class="type-card-desc">${escapeHtml(type.description)}</p>
+      <div class="type-card-example">
+        <div style="margin-bottom: 6px;">${renderMath(type.example.question)}</div>
+        ${type.renderPreview(type.example)}
+      </div>
+    </div>`).join("");
+}
+
+function renderTemplateParts(parts) {
+  const opts = id => Object.entries(QUESTION_TYPES).map(([k, t]) => `<option value="${k}" ${k === id ? "selected" : ""}>${escapeHtml(t.label)}</option>`).join("");
+  document.getElementById("tplParts").innerHTML = parts.map((p, i) => `
+    <tr>
+      <td><strong>${ROMAN[i]}</strong></td>
+      <td><select class="form-control tp-type">${opts(p.type)}</select></td>
+      <td><input type="number" class="form-control tp-count" min="0" step="1" value="${p.count}" oninput="updateTemplateTotal()"></td>
+      <td><input type="number" class="form-control tp-points" min="0" step="0.05" value="${p.points}" oninput="updateTemplateTotal()"></td>
+      <td class="tp-sum"></td>
+      <td class="nowrap">
+        <button class="btn btn-outline btn-sm" title="Lên" onclick="moveTemplatePart(${i}, -1)" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="btn btn-outline btn-sm" title="Xuống" onclick="moveTemplatePart(${i}, 1)" ${i === parts.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="btn btn-outline btn-sm btn-danger-outline" title="Xoá phần" onclick="removeTemplatePart(${i})">✕</button>
+      </td>
+    </tr>`).join("");
+  updateTemplateTotal();
+}
+
+function readTemplateParts() {
+  return [...document.querySelectorAll("#tplParts tr")].map(tr => ({
+    type: tr.querySelector(".tp-type").value,
+    count: Math.max(0, parseInt(tr.querySelector(".tp-count").value, 10) || 0),
+    points: Math.max(0, Number(tr.querySelector(".tp-points").value) || 0)
+  }));
+}
+
+function updateTemplateTotal() {
+  const parts = readTemplateParts();
+  document.querySelectorAll("#tplParts .tp-sum").forEach((td, i) => {
+    td.textContent = parts[i].count ? fmtNum(parts[i].count * parts[i].points) + "đ" : "—";
+  });
+  const { fixed, total } = templateTotal({ parts });
+  document.getElementById("tplTotal").textContent = fixed
+    ? `Tổng: ${fmtNum(total)} điểm${Math.abs(total - 10) > 1e-9 ? " (sẽ quy về thang 10)" : ""}`
+    : "Có phần tuỳ ý số câu: điểm quy về thang 10";
+}
+
+function addTemplatePart() {
+  const parts = readTemplateParts();
+  parts.push({ type: "single", count: 0, points: 0.25 });
+  renderTemplateParts(parts);
+}
+
+function moveTemplatePart(i, d) {
+  const parts = readTemplateParts();
+  [parts[i], parts[i + d]] = [parts[i + d], parts[i]];
+  renderTemplateParts(parts);
+}
+
+function removeTemplatePart(i) {
+  const parts = readTemplateParts();
+  parts.splice(i, 1);
+  renderTemplateParts(parts);
+}
+
+function selectTemplate(id) {
+  editingTplId = id;
+  renderStructurePage();
+}
+
+function newTemplate() {
+  const t = { id: "tpl" + Date.now(), name: "Mẫu mới", parts: [{ type: "single", count: 0, points: 0.25 }] };
+  templates.push(t);
+  editingTplId = t.id;
+  renderStructurePage();
+  document.getElementById("tplName").select();
+}
+
+async function persistTemplates() {
+  await SettingsService.set("exam_templates", templates);
+  renderTemplateSelect();
+  renderStructurePage();
+  if (parsedQuestions.length) onTemplateChange();
+}
+
+async function saveTemplate() {
+  const name = document.getElementById("tplName").value.trim();
+  const parts = readTemplateParts();
+  if (!name) return alert("Vui lòng nhập tên mẫu.");
+  if (!parts.length) return alert("Mẫu cần ít nhất 1 phần.");
+  if (parts.length > ROMAN.length) return alert(`Tối đa ${ROMAN.length} phần.`);
+  Object.assign(templates.find(t => t.id === editingTplId), { name, parts });
+  await persistTemplates();
+  showToast("Đã lưu mẫu cấu trúc.");
+}
+
+async function deleteTemplate() {
+  if (templates.length === 1) return alert("Phải còn ít nhất 1 mẫu cấu trúc.");
+  const t = templates.find(x => x.id === editingTplId);
+  if (!confirm(`Xoá mẫu "${t.name}"?`)) return;
+  templates = templates.filter(x => x.id !== editingTplId);
+  editingTplId = templates[0].id;
+  await persistTemplates();
+}
+
+function showToast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1800);
+}
+
+// =================================================== QUY TAC + NHAP JSON
 function openRulesModal() {
-  const modal = document.getElementById("rulesModal");
-  modal.style.display = "flex";
-
-  // Render cong thuc toan trong bang tra cuu KaTeX
-  if (window.katex) {
-    modal.querySelectorAll(".katex-cell").forEach(cell => {
-      const tex = cell.getAttribute("data-tex");
-      if (tex && !cell.hasChildNodes()) {
-        try {
-          cell.innerHTML = window.katex.renderToString(tex, { throwOnError: false });
-        } catch (e) {
-          cell.textContent = tex;
-        }
-      }
-    });
-  }
+  document.getElementById("rulesText").textContent = buildRulesText(currentTemplate());
+  openModal("rulesModal");
 }
 
-function closeRulesModal() {
-  document.getElementById("rulesModal").style.display = "none";
-}
-
-function copySampleText(elementId, btnId) {
-  const el = document.getElementById(elementId);
-  const btn = document.getElementById(btnId);
-  if (!el || !btn) return;
-
-  const text = el.innerText || el.textContent;
-
-  const onSuccess = () => {
-    const originalText = btn.textContent;
-    btn.textContent = "Da chep";
-    setTimeout(() => {
-      btn.textContent = originalText;
-    }, 1500);
-  };
-
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopy(text, onSuccess));
-  } else {
-    fallbackCopy(text, onSuccess);
-  }
-}
-
-function fallbackCopy(text, callback) {
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.left = "-9999px";
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    document.execCommand("copy");
-    if (callback) callback();
-  } catch (e) {
-    alert("Khong the sao chep tu dong. Vui long sao chep thu cong.");
-  }
-  document.body.removeChild(ta);
-}
-
-// 2. Modal Nhap JSON truc tiep
 function openJsonModal() {
   document.getElementById("jsonInputArea").value = "";
   document.getElementById("jsonModalError").style.display = "none";
-
-  // Hien thi lua chon thay the / noi tiep neu da co cau hoi
-  const modeRow = document.getElementById("jsonImportModeRow");
-  if (parsedQuestions.length > 0) {
-    modeRow.style.display = "block";
-  } else {
-    modeRow.style.display = "none";
-  }
-
-  document.getElementById("jsonModal").style.display = "flex";
+  document.getElementById("jsonImportModeRow").style.display = parsedQuestions.length ? "flex" : "none";
+  openModal("jsonModal");
   document.getElementById("jsonInputArea").focus();
-}
-
-function closeJsonModal() {
-  document.getElementById("jsonModal").style.display = "none";
 }
 
 function submitJsonModal() {
   const raw = document.getElementById("jsonInputArea").value.trim();
-  const errorBox = document.getElementById("jsonModalError");
-  errorBox.style.display = "none";
-
-  if (!raw) {
-    errorBox.textContent = "Vui long dan noi dung JSON!";
-    errorBox.style.display = "block";
-    return;
-  }
-
-  // Tu dong sua dau gach cheo nguoc \ truoc khi parse
-  const fixedRaw = fixJsonBackslashes(raw);
+  if (!raw) return showErrorList("jsonModalError", "", ["Vui lòng dán nội dung JSON."]);
 
   let data;
   try {
-    data = JSON.parse(fixedRaw);
+    data = JSON.parse(fixJsonBackslashes(raw));
   } catch (e) {
-    errorBox.textContent = "Dinh dang JSON khong hop le: " + e.message + " (Hay kiem tra cac dau ngoac hoac dau phay).";
-    errorBox.style.display = "block";
-    return;
+    return showErrorList("jsonModalError", "JSON không hợp lệ:", [e.message + " (kiểm tra dấu ngoặc, dấu phẩy, dấu nháy)"]);
   }
 
-  // Chuan hoa bang normalizeQuestions
-  const normalized = normalizeQuestions(data, true);
-  if (normalized.errors.length > 0) {
-    errorBox.innerHTML = "<strong>Loi dinh dang cau hoi:</strong><br>" + normalized.errors.map(err => `- ${escapeHtml(err)}`).join("<br>");
-    errorBox.style.display = "block";
-    return;
+  const tpl = currentTemplate();
+  const result = normalizeExam(data, tpl);
+  // Chi chan nhung loi theo tung cau / sai cau truc phan; thieu so cau thi cho nhap roi bo sung bang nut +
+  const blocking = result.errors.filter(e => !/: cần \d+ câu, hiện có \d+\.$/.test(e));
+  if (blocking.length || !result.questions.length) {
+    return showErrorList("jsonModalError", "Lỗi định dạng:", blocking.length ? blocking : result.errors);
   }
 
-  // Tu dong dien tieu de de thi neu co trong JSON
-  if (normalized.title) {
-    document.getElementById("examTitle").value = normalized.title;
-  }
+  if (result.title) document.getElementById("examTitle").value = result.title;
+  if (result.duration_minutes >= 1) document.getElementById("examDuration").value = result.duration_minutes;
 
-  // Tu dong dien thoi gian lam bai neu co trong JSON
-  if (normalized.duration_minutes && normalized.duration_minutes >= 1) {
-    document.getElementById("examDuration").value = normalized.duration_minutes;
-  }
+  const append = document.querySelector('input[name="jsonImportMode"]:checked')?.value === "append" && parsedQuestions.length;
+  parsedQuestions = append ? normalizeExam(parsedQuestions.concat(result.questions), tpl).questions : result.questions;
+  showUploadStatus(`Đã nhập ${result.questions.length} câu hỏi.`);
 
-  // Kiem tra che do Thay the hoac Noi tiep
-  const modeInput = document.querySelector('input[name="jsonImportMode"]:checked');
-  const importMode = modeInput ? modeInput.value : "replace";
-
-  if (importMode === "append" && parsedQuestions.length > 0) {
-    parsedQuestions = parsedQuestions.concat(normalized.questions);
-    showUploadStatus(`Da noi them ${normalized.questions.length} cau hoi thanh cong (Tong cong: ${parsedQuestions.length} cau)!`, false);
-  } else {
-    parsedQuestions = normalized.questions;
-    showUploadStatus(`Da nap thanh cong ${parsedQuestions.length} cau hoi tu JSON!`, false);
-  }
-
-  closeJsonModal();
+  closeModal("jsonModal");
   renderPreview();
 }
 
-// 3. Modal Them / Sua cau hoi thu cong
-function openAddQuestionModal() {
-  editingQuestionIndex = null;
-  document.getElementById("questionModalTitle").textContent = "Them cau hoi thu cong";
-  document.getElementById("modalQText").value = "";
+function showUploadStatus(msg) {
+  const el = document.getElementById("uploadStatus");
+  el.textContent = msg;
+  el.style.display = msg ? "block" : "none";
+}
+
+// =================================================== THEM / SUA CAU
+function openQuestionModal(index, part) {
+  const tpl = currentTemplate();
+  const q = index !== null ? parsedQuestions[index] : null;
+  part = q ? q.part : part;
+  const typeId = q ? q.type : tpl.parts[part].type;
+  editing = { index, part, typeId };
+
+  const label = q ? questionLabel(parsedQuestions, index).text : `${partLabel(part)} · Câu mới`;
+  document.getElementById("questionModalTitle").textContent = `${q ? "Sửa" : "Thêm"} ${label} — ${QUESTION_TYPES[typeId].label}`;
+  document.getElementById("modalQText").value = q ? q.question : "";
+  document.getElementById("modalQPoints").value = q ? maxPoints(q) : tpl.parts[part]?.points ?? 1;
+  document.getElementById("modalTypeEditor").innerHTML = QUESTION_TYPES[typeId].renderEditor(q);
   document.getElementById("modalQError").style.display = "none";
-  document.querySelector('input[name="modalQType"][value="single"]').checked = true;
-  toggleQuestionType();
-
-  // Reset phuong an trac nghiem ve 4 phuong an mac dinh
-  const container = document.getElementById("modalOptionsList");
-  container.innerHTML = "";
-  for (let i = 0; i < 4; i++) {
-    addModalOptionRow("", i === 0);
-  }
-
-  // Reset tu luan
-  document.getElementById("modalShortAnswers").value = "";
-  document.querySelector('input[name="modalShortKind"][value="number"]').checked = true;
-
+  setModalImage(q?.image || "");
   updateModalMathPreview();
-  document.getElementById("questionModal").style.display = "flex";
+  openModal("questionModal");
   document.getElementById("modalQText").focus();
-}
-
-function openEditQuestionModal(index) {
-  const q = parsedQuestions[index];
-  if (!q) return;
-
-  editingQuestionIndex = index;
-  document.getElementById("questionModalTitle").textContent = `Chinh sua Cau ${index + 1}`;
-  document.getElementById("modalQText").value = q.question;
-  document.getElementById("modalQError").style.display = "none";
-
-  const type = q.type || "single";
-  const typeRadio = document.querySelector(`input[name="modalQType"][value="${type}"]`);
-  if (typeRadio) typeRadio.checked = true;
-  toggleQuestionType();
-
-  if (type === "single") {
-    const container = document.getElementById("modalOptionsList");
-    container.innerHTML = "";
-    (q.options || []).forEach(opt => {
-      addModalOptionRow(opt.text, opt.is_correct === true);
-    });
-  } else {
-    const kind = q.answer_kind || "number";
-    const kindRadio = document.querySelector(`input[name="modalShortKind"][value="${kind}"]`);
-    if (kindRadio) kindRadio.checked = true;
-    document.getElementById("modalShortAnswers").value = (q.answers || []).join("\n");
-  }
-
-  updateModalMathPreview();
-  document.getElementById("questionModal").style.display = "flex";
-  document.getElementById("modalQText").focus();
-}
-
-function closeQuestionModal() {
-  document.getElementById("questionModal").style.display = "none";
-}
-
-function toggleQuestionType() {
-  const type = document.querySelector('input[name="modalQType"]:checked').value;
-  const singleArea = document.getElementById("singleOptionsArea");
-  const shortArea = document.getElementById("shortOptionsArea");
-
-  if (type === "single") {
-    singleArea.style.display = "block";
-    shortArea.style.display = "none";
-  } else {
-    singleArea.style.display = "none";
-    shortArea.style.display = "block";
-  }
 }
 
 function updateModalMathPreview() {
   const text = document.getElementById("modalQText").value.trim();
-  const preview = document.getElementById("modalQMathPreview");
-  if (!text) {
-    preview.textContent = "Xem truoc cong thuc se hien o day...";
-    return;
-  }
-  preview.innerHTML = renderMath(text);
+  document.getElementById("modalQMathPreview").innerHTML = text ? renderMath(text) : "Xem trước công thức sẽ hiện ở đây...";
 }
 
-function addModalOptionRow(text = "", isCorrect = false) {
-  const container = document.getElementById("modalOptionsList");
-  const currentRows = container.querySelectorAll(".modal-opt-row");
-  if (currentRows.length >= PREFIXES.length) {
-    alert(`Toi da ${PREFIXES.length} phuong an!`);
-    return;
+function setModalImage(src) {
+  modalImage = src;
+  document.getElementById("modalQImage").src = src || "";
+  document.getElementById("modalQImageBox").style.display = src ? "flex" : "none";
+}
+
+async function onImagePicked(file) {
+  if (!file) return;
+  try {
+    setModalImage(await compressImage(file));
+  } catch (err) {
+    alert(err.message);
   }
-
-  const row = document.createElement("div");
-  row.className = "modal-opt-row";
-  row.style.cssText = "display: flex; align-items: center; gap: 8px; margin-bottom: 8px;";
-
-  row.innerHTML = `
-    <input type="radio" name="modalCorrectRadio" ${isCorrect ? "checked" : ""} style="cursor: pointer;">
-    <input type="text" class="form-control modal-opt-input" value="${escapeHtml(text)}" placeholder="Noi dung phuong an (co the dung $...$)" style="flex: 1;">
-    <button type="button" class="btn btn-outline" style="padding: 6px 10px; color: var(--danger); border-color: #fecaca;" onclick="this.parentElement.remove()">Xoa</button>
-  `;
-
-  container.appendChild(row);
 }
 
 function saveQuestionModal() {
-  const qText = document.getElementById("modalQText").value.trim();
-  const errorBox = document.getElementById("modalQError");
-  errorBox.style.display = "none";
-
-  if (!qText) {
-    errorBox.textContent = "Vui long nhap noi dung cau hoi!";
-    errorBox.style.display = "block";
-    return;
-  }
-
-  const type = document.querySelector('input[name="modalQType"]:checked').value;
-  let questionObj = {
-    type,
-    question: qText
+  const { index, part, typeId } = editing;
+  const raw = {
+    type: typeId,
+    part,
+    question: document.getElementById("modalQText").value,
+    points: document.getElementById("modalQPoints").value,
+    image: modalImage,
+    ...QUESTION_TYPES[typeId].readEditor(document.getElementById("modalTypeEditor"))
   };
+  const { q, errors } = normalizeOne(raw);
+  if (errors.length) return showErrorList("modalQError", "", errors);
+  q.part = part;
 
-  if (type === "single") {
-    const rows = document.querySelectorAll("#modalOptionsList .modal-opt-row");
-    const options = [];
-    rows.forEach(row => {
-      const val = row.querySelector(".modal-opt-input").value.trim();
-      const isCorrect = row.querySelector('input[type="radio"]').checked;
-      options.push({ text: val, is_correct: isCorrect });
-    });
+  const list = parsedQuestions.slice();
+  if (index !== null) list[index] = q;
+  else list.push(q);
+  parsedQuestions = normalizeExam(list, currentTemplate()).questions; // sap lai theo phan
 
-    questionObj.options = options;
-  } else {
-    const kind = document.querySelector('input[name="modalShortKind"]:checked').value;
-    const rawAnswers = document.getElementById("modalShortAnswers").value.split(/\r?\n/).map(a => a.trim()).filter(Boolean);
-    questionObj.answer_kind = kind;
-    questionObj.answers = rawAnswers;
-  }
-
-  // Kiem tra bang normalizeQuestions
-  const validation = normalizeQuestions([questionObj], true);
-  if (validation.errors.length > 0) {
-    errorBox.innerHTML = validation.errors.map(err => `- ${escapeHtml(err)}`).join("<br>");
-    errorBox.style.display = "block";
-    return;
-  }
-
-  const validQ = validation.questions[0];
-
-  if (editingQuestionIndex !== null && editingQuestionIndex >= 0) {
-    parsedQuestions[editingQuestionIndex] = validQ;
-  } else {
-    parsedQuestions.push(validQ);
-  }
-
-  closeQuestionModal();
+  closeModal("questionModal");
   renderPreview();
 }
 
 function deleteQuestion(index) {
-  if (confirm(`Ban co chac chan muon xoa Cau ${index + 1} khong?`)) {
-    parsedQuestions.splice(index, 1);
-    renderPreview();
-  }
+  if (!confirm(`Xoá ${questionLabel(parsedQuestions, index).text}?`)) return;
+  parsedQuestions.splice(index, 1);
+  if (!parsedQuestions.length) return resetImport();
+  renderPreview();
 }
 
-// 4. Huy toan bo de dang nhap
 function cancelImport() {
-  if (confirm(`Ban co chac chan muon huy toan bo ${parsedQuestions.length} cau hoi dang nhap khong?`)) {
-    resetImport();
-  }
+  if (confirm(`Huỷ toàn bộ ${parsedQuestions.length} câu hỏi đang nhập?`)) resetImport();
 }
 
 function resetImport() {
   parsedQuestions = [];
-  document.getElementById("previewSection").style.display = "none";
-  document.getElementById("btnCancelImport").style.display = "none";
-  document.getElementById("uploadStatus").style.display = "none";
   document.getElementById("examTitle").value = "";
   document.getElementById("examDuration").value = "45";
+  showUploadStatus("");
+  renderPreview();
 }
 
-// 5. Hien thi ban xem truoc (Preview)
+// =================================================== XEM TRUOC THEO PHAN
 function renderPreview() {
-  const container = document.getElementById("previewList");
-  const countEl = document.getElementById("previewCount");
-  const saveBtn = document.getElementById("btnSaveExam");
-  const cancelBtn = document.getElementById("btnCancelImport");
-  const previewSection = document.getElementById("previewSection");
+  const section = document.getElementById("previewSection");
+  section.style.display = parsedQuestions.length ? "block" : "none";
+  if (!parsedQuestions.length) return;
 
-  if (parsedQuestions.length === 0) {
-    previewSection.style.display = "none";
-    cancelBtn.style.display = "none";
-    return;
-  }
+  const tpl = currentTemplate();
+  const result = normalizeExam(parsedQuestions, tpl);
+  document.getElementById("previewCount").textContent = parsedQuestions.length;
+  document.getElementById("previewPoints").textContent = fmtNum(parsedQuestions.reduce((s, q) => s + maxPoints(q), 0));
 
-  previewSection.style.display = "block";
-  cancelBtn.style.display = "inline-flex";
-  countEl.textContent = parsedQuestions.length;
+  // Loi cau truc (khong gan voi cau cu the) hien o dau
+  showErrorList("previewErrors", "Chưa đúng cấu trúc đề:", result.errors.filter(e => /^PHẦN [IVX]+ \(|^Mẫu|^Đề thi/.test(e)));
 
-  let html = "";
-  let hasInvalidQuestion = false;
-
-  parsedQuestions.forEach((q, qIdx) => {
-    const isOk = hasCorrectAnswer(q);
-    if (!isOk) hasInvalidQuestion = true;
-    const borderStyle = isOk ? "var(--border)" : "#ef4444";
-    const typeBadge = q.type === "short"
-      ? `<span class="badge badge-blue">Tu luan ${q.answer_kind === "number" ? "So" : "Chu"}</span>`
-      : `<span class="badge" style="background: #f1f5f9; color: var(--text-main);">Trac nghiem</span>`;
-
-    html += `
-      <div style="background: #ffffff; border: 2px solid ${borderStyle}; border-radius: var(--radius); padding: 12px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px;">
-          <div>
-            <span style="font-weight: 700; color: var(--primary); margin-right: 6px;">Cau ${qIdx + 1}</span>
-            ${typeBadge}
-            ${!isOk ? '<span class="badge" style="background: #fee2e2; color: #dc2626; margin-left: 6px;">Chua hop le</span>' : ''}
-          </div>
-          <div class="q-actions">
-            <button class="btn btn-outline" onclick="openEditQuestionModal(${qIdx})">Sua</button>
-            <button class="btn btn-outline" style="color: var(--danger); border-color: #fca5a5;" onclick="deleteQuestion(${qIdx})">Xoa</button>
-          </div>
+  const groups = groupByPart(parsedQuestions);
+  document.getElementById("previewList").innerHTML = tpl.parts.map((p, pi) => {
+    const t = QUESTION_TYPES[p.type];
+    const items = groups.find(g => g.part === pi)?.items || [];
+    return `
+      <div class="part-block">
+        <div class="part-head">
+          <strong>${partLabel(pi)}.</strong> ${escapeHtml(t.intro(items.length))}
+          <span class="chip">${escapeHtml(t.label)} · ${items.length}${p.count ? "/" + p.count : ""} câu</span>
         </div>
+        ${items.map(({ q, index, num }) => {
+          const qErr = result.qErrors[index] || [];
+          return `
+          <div class="pv-card ${qErr.length ? "pv-invalid" : ""}">
+            <div class="pv-head">
+              <div><strong class="pv-num">Câu ${num}.</strong> <span class="badge badge-muted">${fmtNum(maxPoints(q))}đ</span></div>
+              <div class="q-actions">
+                <button class="btn btn-outline" onclick="openQuestionModal(${index})">✎ Sửa</button>
+                <button class="btn btn-outline btn-danger-outline" onclick="deleteQuestion(${index})">🗑 Xoá</button>
+              </div>
+            </div>
+            <div class="pv-question">${renderMath(q.question)}</div>
+            ${q.image ? `<img class="q-image" src="${escapeHtml(q.image)}" alt="Hình vẽ">` : ""}
+            ${t.renderPreview(q)}
+            ${qErr.map(e => `<div class="field-error">${escapeHtml(e)}</div>`).join("")}
+          </div>`;
+        }).join("")}
+        <button type="button" class="btn-icon-add" title="Thêm câu vào ${partLabel(pi)}" onclick="openQuestionModal(null, ${pi})">+</button>
+      </div>`;
+  }).join("");
 
-        <div style="margin-bottom: 10px; font-size: 0.95rem; line-height: 1.5;">
-          ${renderMath(q.question)}
-        </div>
-    `;
-
-    if (q.type === "short") {
-      html += `
-        <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; font-size: 0.85rem;">
-          <strong style="color: var(--text-muted);">Dap an chap nhan:</strong>
-          <span style="color: var(--success); font-weight: 600; margin-left: 6px;">${escapeHtml(q.answers.join(" | "))}</span>
-        </div>
-      `;
-    } else {
-      html += `<div style="display: flex; flex-direction: column; gap: 6px;">`;
-      q.options.forEach((opt, optIdx) => {
-        const isCorrect = opt.is_correct === true;
-        const badge = isCorrect ? '<span class="badge badge-green" style="margin-left: 6px;">Dap an dung</span>' : '';
-        html += `
-          <label style="display: flex; align-items: center; font-size: 0.9rem; cursor: pointer; padding: 4px; border-radius: 4px;">
-            <input type="radio" name="preview_correct_${qIdx}" ${isCorrect ? "checked" : ""} onchange="setCorrectOption(${qIdx}, ${optIdx})" style="margin-right: 8px;">
-            <span><strong>${PREFIXES[optIdx] || optIdx}.</strong> ${renderMath(opt.text)} ${badge}</span>
-          </label>
-        `;
-      });
-      html += `</div>`;
-    }
-
-    html += `</div>`;
-  });
-
-  container.innerHTML = html;
-
-  if (hasInvalidQuestion) {
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Con cau hoi chua hop le (khong the xuat ban)";
-  } else {
-    saveBtn.disabled = false;
-    saveBtn.textContent = "Xuat ban de thi len he thong";
-  }
+  const mathErrors = document.querySelectorAll("#previewList .katex-error").length;
+  const btn = document.getElementById("btnSaveExam");
+  btn.disabled = result.errors.length > 0;
+  btn.textContent = result.errors.length
+    ? `Còn ${result.errors.length} lỗi, chưa thể xuất bản`
+    : mathErrors ? `Xuất bản (cảnh báo: ${mathErrors} công thức lỗi hiển thị)` : "Xuất bản đề thi lên hệ thống";
 }
 
-function setCorrectOption(qIdx, optIdx) {
-  if (parsedQuestions[qIdx] && parsedQuestions[qIdx].options) {
-    parsedQuestions[qIdx].options.forEach((opt, i) => {
-      opt.is_correct = (i === optIdx);
-    });
+// =================================================== XUAT BAN
+async function saveExam() {
+  const title = document.getElementById("examTitle").value.trim();
+  const duration = parseInt(document.getElementById("examDuration").value, 10);
+
+  if (!title) { alert("Vui lòng nhập tiêu đề đề thi!"); return document.getElementById("examTitle").focus(); }
+  if (!(duration >= 1)) { alert("Thời gian làm bài phải từ 1 phút trở lên!"); return document.getElementById("examDuration").focus(); }
+  if (normalizeExam(parsedQuestions, currentTemplate()).errors.length) return alert("Đề chưa đúng cấu trúc, hãy sửa các lỗi trước khi xuất bản.");
+
+  const btn = document.getElementById("btnSaveExam");
+  btn.disabled = true;
+  btn.textContent = "Đang lưu đề thi...";
+  try {
+    await ExamService.createExam(title, duration, parsedQuestions);
+    alert("Đã xuất bản đề thi! Tất cả thí sinh có thể vào làm.");
+    resetImport();
+    loadExistingExams();
+  } catch (err) {
+    alert("Lỗi khi lưu đề thi: " + err.message);
     renderPreview();
   }
 }
 
-// 6. Luu de thi len Supabase
-async function saveExam() {
-  const title = document.getElementById("examTitle").value.trim();
-  const durationInput = document.getElementById("examDuration").value.trim();
-  const duration = parseInt(durationInput, 10);
-
-  if (!title) {
-    alert("Vui long nhap tieu de de thi!");
-    document.getElementById("examTitle").focus();
-    return;
-  }
-
-  if (isNaN(duration) || duration < 1) {
-    alert("Thoi gian lam bai phai la so nguyen tu 1 phut tro len!");
-    document.getElementById("examDuration").focus();
-    return;
-  }
-
-  if (!parsedQuestions || parsedQuestions.length === 0) {
-    alert("Vui long nhap de thi co it nhat 1 cau hoi!");
-    return;
-  }
-
-  const invalid = parsedQuestions.find(q => !hasCorrectAnswer(q));
-  if (invalid) {
-    alert("Con cau hoi chua hop le. Vui long kiem tra lai truoc khi xuat ban!");
-    return;
-  }
-
-  const btn = document.getElementById("btnSaveExam");
-  btn.disabled = true;
-  btn.textContent = "Dang luu de thi...";
-
-  try {
-    await ExamService.createExam(title, duration, parsedQuestions);
-    alert("Da xuat ban de thi thanh cong! Tat ca thi sinh bay gio deu co the vao lam.");
-    resetImport();
-    loadExistingExams();
-  } catch (err) {
-    alert("Loi khi luu de thi: " + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Xuat ban de thi len he thong";
-  }
-}
-
-// 7. Lay danh sach de thi da tao
 async function loadExistingExams() {
   const tbody = document.getElementById("examTableBody");
   try {
     const exams = await ExamService.getAllExams();
-    if (!exams || exams.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Chua co de thi nao.</td></tr>';
-      return;
-    }
-
-    let html = "";
-    exams.forEach(ex => {
-      const dateStr = ex.created_at ? new Date(ex.created_at).toLocaleDateString("vi-VN") : "--";
-      html += `
+    tbody.innerHTML = exams && exams.length
+      ? exams.map(ex => `
         <tr>
           <td>#${ex.id}</td>
           <td><strong>${escapeHtml(ex.title)}</strong></td>
-          <td>${ex.duration_minutes} phut</td>
-          <td>${dateStr}</td>
-          <td>
-            <button class="btn btn-outline" style="color: var(--danger); border-color: #fca5a5; padding: 4px 8px; font-size: 0.8rem;" onclick="deleteExam(${ex.id})">Xoa</button>
-          </td>
-        </tr>
-      `;
-    });
-    tbody.innerHTML = html;
+          <td>${ex.duration_minutes} phút</td>
+          <td>${ex.created_at ? new Date(ex.created_at).toLocaleDateString("vi-VN") : "--"}</td>
+          <td><button class="btn btn-outline btn-sm btn-danger-outline" onclick="deleteExam(${ex.id})">Xoá</button></td>
+        </tr>`).join("")
+      : '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Chưa có đề thi nào.</td></tr>';
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Loi tai danh sach de thi.</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Lỗi tải danh sách đề thi.</td></tr>';
   }
 }
 
-// Xoa cung de thi khoi he thong
 async function deleteExam(examId) {
-  if (!confirm(`Ban co chac chan muon xoa vinh vien de thi #${examId} khoi he thong khong? Toan bo ket qua thi lien quan se bi anh huong.`)) {
-    return;
-  }
-
+  if (!confirm(`Xoá vĩnh viễn đề thi #${examId}?`)) return;
   try {
     await ExamService.deleteExam(examId);
-    alert(`Da xoa vinh vien de thi #${examId} thanh cong!`);
     loadExistingExams();
     loadResults();
   } catch (err) {
-    alert("Loi khi xoa de thi: " + err.message);
+    alert("Lỗi khi xoá đề thi: " + err.message);
   }
 }
 
-// 8. Lay danh sach ket qua & Nhat ky thao tac (Audit Logs)
+// =================================================== KET QUA + CHAM TU LUAN
 async function loadResults() {
   const tbody = document.getElementById("resultsTableBody");
   try {
-    allResultsData = await ResultService.getAllResults();
-    if (!allResultsData || allResultsData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Chua co bai thi nao duoc nop.</td></tr>';
-      return;
-    }
-
-    let html = "";
-    allResultsData.forEach((res, index) => {
-      const dateStr = res.submitted_at ? new Date(res.submitted_at).toLocaleString("vi-VN") : "--";
-      html += `
+    allResultsData = await ResultService.getAllResults() || [];
+    tbody.innerHTML = allResultsData.length
+      ? allResultsData.map((res, i) => {
+        const pending = (res.answers || []).filter(e => e.pending).length;
+        return `
         <tr>
           <td>#${res.id}</td>
           <td><strong>${escapeHtml(res.student_name)}</strong></td>
-          <td><span class="badge badge-blue" style="font-size: 0.9rem;">${res.score} / 10</span></td>
-          <td>${res.total_questions || "--"} cau</td>
-          <td>${res.duration_minutes || "--"} phut</td>
-          <td>${dateStr}</td>
-          <td>
-            <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" onclick="viewResultDetail(${index})">Xem nhat ky</button>
-          </td>
-        </tr>
-      `;
-    });
-    tbody.innerHTML = html;
+          <td><span class="badge badge-blue">${fmtNum(Number(res.score))} / 10</span></td>
+          <td>${pending ? `<span class="badge badge-amber">Chờ chấm ${pending} câu</span>` : '<span class="badge badge-green">Đã chấm</span>'}</td>
+          <td>${res.duration_minutes || "--"} phút</td>
+          <td>${res.submitted_at ? new Date(res.submitted_at).toLocaleString("vi-VN") : "--"}</td>
+          <td><button class="btn btn-outline btn-sm" onclick="viewResultDetail(${i})">${pending ? "Chấm bài" : "Xem"}</button></td>
+        </tr>`;
+      }).join("")
+      : '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Chưa có bài thi nào được nộp.</td></tr>';
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">Loi tai ket qua thi.</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger);">Lỗi tải kết quả thi.</td></tr>';
   }
 }
 
-// 9. Xem chi tiet nhat ky thao tac va bai lam
-function viewResultDetail(index) {
+async function viewResultDetail(index) {
   const item = allResultsData[index];
   if (!item) return;
+  detailIndex = index;
+  detailExam = null;
+  document.getElementById("modalTitle").textContent = `${item.student_name} — ${fmtNum(Number(item.score))}/10`;
+  renderResultAnswers();
+  openModal("detailModal");
 
-  document.getElementById("modalTitle").textContent = `Chi tiet bai lam: ${item.student_name} (Diem: ${item.score}/10)`;
+  document.getElementById("modalLogsList").innerHTML = Array.isArray(item.action_logs) && item.action_logs.length
+    ? item.action_logs.map(log => `
+      <div class="log-row">
+        <span style="color: var(--text-muted);">[${escapeHtml(log.time || "--")}]</span>
+        <strong style="color: var(--primary);">${escapeHtml(log.type)}:</strong>
+        <span>${escapeHtml(log.detail)}</span>
+      </div>`).join("")
+    : '<p style="color: var(--text-muted);">Không có nhật ký thao tác.</p>';
 
-  // Hien thi cau tra loi
-  const answersList = document.getElementById("modalAnswersList");
-  let ansHtml = "";
-  if (Array.isArray(item.answers) && item.answers.length > 0) {
-    item.answers.forEach(a => {
-      const statusText = a.is_correct ? '<span style="color: var(--success); font-weight: 600;">Dung</span>' : '<span style="color: var(--danger); font-weight: 600;">Sai</span>';
-      let answerText = "";
-
-      if (a.text_answer !== undefined && a.text_answer !== null) {
-        answerText = `Dien [${renderMath(String(a.text_answer))}]`;
-      } else {
-        const chosen = a.selected_index !== null ? (PREFIXES[a.selected_index] || a.selected_index) : "Chua chon";
-        answerText = `Chon [${chosen}]`;
-      }
-
-      ansHtml += `<div style="padding: 6px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
-        <span><strong>Cau ${a.question_index}:</strong> ${answerText}</span>
-        <span>${statusText}</span>
-      </div>`;
-    });
-  } else {
-    ansHtml = '<p style="color: var(--text-muted);">Khong co du lieu cau tra loi chi tiet.</p>';
+  // Tai de de hien noi dung + loi giai cau tu luan cho giao vien
+  if ((item.answers || []).some(e => QUESTION_TYPES[e.type]?.manual) && item.exam_id) {
+    try {
+      detailExam = await ExamService.getExamDetail(item.exam_id);
+      if (detailIndex === index) renderResultAnswers();
+    } catch (e) { /* van cham duoc, chi thieu noi dung cau */ }
   }
-  answersList.innerHTML = ansHtml;
+}
 
-  // Hien thi nhat ky thao tac (Action Logs)
-  const logsList = document.getElementById("modalLogsList");
-  let logsHtml = "";
-  if (Array.isArray(item.action_logs) && item.action_logs.length > 0) {
-    item.action_logs.forEach(log => {
-      logsHtml += `
-        <div style="padding: 5px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace;">
-          <span style="color: var(--text-muted); font-size: 0.8rem;">[${log.time || "--"}]</span>
-          <strong style="color: var(--primary); font-size: 0.85rem;">${escapeHtml(log.type)}:</strong>
-          <span>${escapeHtml(log.detail)}</span>
+function renderResultAnswers() {
+  const item = allResultsData[detailIndex];
+  const entries = Array.isArray(item.answers) ? item.answers : [];
+  const qs = detailExam?.questions || entries.map(e => ({ part: e.part ?? 0, type: e.type }));
+  let manualCount = 0;
+
+  document.getElementById("modalAnswersList").innerHTML = entries.length ? entries.map((e, i) => {
+    const r = formatResultEntry(e);
+    const label = questionLabel(qs, i).text;
+    if (r.manual) {
+      manualCount++;
+      const q = detailExam?.questions?.[i];
+      return `<div class="result-row result-manual">
+        <div style="flex: 1;">
+          <strong>${label}</strong> <small>(${escapeHtml(r.label)})</small>
+          ${q ? `<div class="pv-question" style="margin-top: 4px;">${renderMath(q.question)}</div>` : ""}
+          ${q?.solution ? `<div class="pv-row pv-correct">Lời giải: ${renderMath(q.solution)}</div>` : ""}
         </div>
-      `;
-    });
-  } else {
-    logsHtml = '<p style="color: var(--text-muted);">Khong co nhat ky thao tac nao duoc ghi lai.</p>';
+        <label class="grade-input">
+          <input type="number" class="form-control" data-entry="${i}" min="0" max="${r.max}" step="0.05" value="${r.pending ? "" : r.points ?? ""}" placeholder="?">
+          / ${fmtNum(r.max)}đ
+        </label>
+      </div>`;
+    }
+    const color = r.points >= r.max ? "var(--success)" : r.points > 0 ? "#b45309" : "var(--danger)";
+    return `<div class="result-row">
+      <span><strong>${label}</strong> <small>(${escapeHtml(r.label)})</small>: ${r.text}</span>
+      <strong style="color: ${color};">${fmtNum(r.points)}/${fmtNum(r.max)}đ</strong>
+    </div>`;
+  }).join("") : '<p style="color: var(--text-muted);">Không có dữ liệu câu trả lời.</p>';
+
+  document.getElementById("gradeBar").style.display = manualCount ? "flex" : "none";
+}
+
+async function saveManualGrades() {
+  const item = allResultsData[detailIndex];
+  const entries = clone(item.answers);
+  for (const input of document.querySelectorAll("#modalAnswersList [data-entry]")) {
+    const e = entries[input.dataset.entry];
+    if (input.value === "") continue; // chua cham cau nay
+    const v = Number(input.value);
+    if (!(v >= 0 && v <= e.max)) return alert(`Điểm phải từ 0 đến ${fmtNum(e.max)}.`);
+    e.points = v;
+    e.pending = false;
   }
-  logsList.innerHTML = logsHtml;
-
-  document.getElementById("detailModal").style.display = "flex";
-}
-
-function closeDetailModal() {
-  document.getElementById("detailModal").style.display = "none";
-}
-
-function showUploadStatus(msg, isError) {
-  const el = document.getElementById("uploadStatus");
-  el.textContent = msg;
-  el.style.display = "block";
-  el.className = isError ? "alert-box alert-danger" : "alert-box alert-info";
+  const { score } = summarizeEntries(entries);
+  try {
+    const updated = await ResultService.updateResult(item.id, { answers: entries, score });
+    allResultsData[detailIndex] = { ...item, ...updated };
+    document.getElementById("modalTitle").textContent = `${item.student_name} — ${fmtNum(score)}/10`;
+    renderResultAnswers();
+    showToast("Đã lưu điểm tự luận.");
+    loadResults();
+  } catch (err) {
+    alert("Không lưu được điểm: " + err.message);
+  }
 }

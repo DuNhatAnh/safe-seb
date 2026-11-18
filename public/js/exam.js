@@ -2,14 +2,15 @@
 let currentStudent = "";
 let currentExam = null;
 let currentQuestions = [];
-let userAnswers = {}; // { [questionIndex]: optionIndex (number) hoac textValue (string) }
+let userAnswers = {};   // { [questionIndex]: dap an hop le (dinh dang theo tung dang, xem question-types.js) }
+let invalidInputs = {}; // { [questionIndex]: chuoi thi sinh go sai dinh dang }
 let currentQuestionIndex = 0;
 let remainingSeconds = 0;
 let deadline = 0;
 let timerInterval = null;
 let tracker = null;
 let isSubmitting = false;
-let shortDebounceTimer = null;
+let inputDebounceTimer = null;
 
 // Khoi tao khi tai trang
 window.addEventListener("DOMContentLoaded", () => {
@@ -21,20 +22,72 @@ window.addEventListener("DOMContentLoaded", () => {
   }
   document.getElementById("studentBadge").textContent = currentStudent;
 
+  // Lang nghe thao tac tra loi cho moi dang cau (phan tu co data-ans do registry sinh ra)
+  const container = document.getElementById("optionsContainer");
+  container.addEventListener("click", e => {
+    const el = e.target.closest("[data-ans]");
+    if (el && el.tagName !== "INPUT") handleAnswer(el, true);
+  });
+  container.addEventListener("input", e => {
+    if (e.target.dataset.ans !== "input") return;
+    clearTimeout(inputDebounceTimer);
+    inputDebounceTimer = setTimeout(() => handleAnswer(e.target, false), 300);
+  });
+  container.addEventListener("change", e => {
+    if (e.target.dataset.ans !== "input") return;
+    clearTimeout(inputDebounceTimer);
+    handleAnswer(e.target, true);
+  });
+
   loadAssignedExams();
 });
 
+function logoutStudent() {
+  if (confirm("Đăng xuất khỏi tài khoản thí sinh?")) window.location.href = "index.html";
+}
+
 // Dem so cau da tra loi hop le
+// Cau tu luan giao vien cham (lam tren giay) khong tinh vao so cau can tra loi
+function answerableIndexes() {
+  return currentQuestions.map((q, i) => i).filter(i => !getType(currentQuestions[i]).manual);
+}
+
 function getAnsweredCount() {
-  let count = 0;
-  if (!currentQuestions || currentQuestions.length === 0) return 0;
-  currentQuestions.forEach((q, idx) => {
-    const val = userAnswers[idx];
-    if (val !== undefined && val !== null && String(val).trim() !== "") {
-      count++;
-    }
-  });
-  return count;
+  return answerableIndexes().filter(i => getType(currentQuestions[i]).isAnswered(userAnswers[i])).length;
+}
+
+function updateAnsweredStatus() {
+  document.getElementById("answeredStatus").textContent = `Đã trả lời: ${getAnsweredCount()} / ${answerableIndexes().length}`;
+  renderQuestionNav();
+}
+
+// De co chia phan (I, II, III...) hay la de cu (danh sach phang)
+function hasParts() {
+  return currentQuestions.some(q => Number.isInteger(q.part));
+}
+
+// Luoi dieu huong cau hoi, chia theo phan
+function renderQuestionNav() {
+  const groups = groupByPart(currentQuestions);
+  document.getElementById("questionNav").innerHTML = groups.map(g => `
+    <div class="q-nav-part">
+      ${hasParts() ? `<span class="q-nav-label">${ROMAN[g.part] || g.part + 1}</span>` : ""}
+      ${g.items.map(({ q, index, num }) => {
+        const t = getType(q);
+        const cls = [
+          index === currentQuestionIndex ? "current" : "",
+          t.manual ? "manual" : t.isAnswered(userAnswers[index]) ? "done" : "",
+          invalidInputs[index] !== undefined ? "invalid" : ""
+        ].join(" ");
+        return `<button type="button" class="q-nav-btn ${cls}" onclick="goToQuestion(${index})">${hasParts() ? num : index + 1}</button>`;
+      }).join("")}
+    </div>`).join("");
+}
+
+function goToQuestion(index) {
+  flushPendingInput();
+  currentQuestionIndex = index;
+  renderQuestion();
 }
 
 // 1. Lazy load: Lay danh sach de thi cho thi sinh
@@ -87,6 +140,7 @@ async function startExam(examId) {
     currentQuestions = examDetail.questions;
     currentQuestionIndex = 0;
     userAnswers = {};
+    invalidInputs = {};
     isSubmitting = false;
 
     // Khoi tao bo theo doi thao tac
@@ -113,6 +167,7 @@ async function startExam(examId) {
 
     // Chuyen giao dien
     document.getElementById("viewExamList").style.display = "none";
+    document.getElementById("btnLogout").style.display = "none";
     document.getElementById("viewExamPlay").style.display = "block";
     document.getElementById("headerTitle").textContent = currentExam.title;
 
@@ -136,183 +191,88 @@ function tick() {
   }
 }
 
-// Hien thi cau hoi hien tai
+// Hien thi cau hoi hien tai (giao dien theo dang lay tu registry)
 function renderQuestion() {
-  const q = currentQuestions[currentQuestionIndex];
+  const i = currentQuestionIndex;
+  const q = currentQuestions[i];
   if (!q) return;
 
-  document.getElementById("questionCounter").textContent = `Câu ${currentQuestionIndex + 1} / ${currentQuestions.length}`;
-  document.getElementById("answeredStatus").textContent = `Đã trả lời: ${getAnsweredCount()} / ${currentQuestions.length}`;
-  document.getElementById("questionText").innerHTML = renderMath(q.question);
+  const label = questionLabel(currentQuestions, i);
+  const header = document.getElementById("partHeader");
+  if (hasParts()) {
+    const group = groupByPart(currentQuestions).find(g => g.part === label.part);
+    header.innerHTML = `<strong>${partLabel(label.part)}.</strong> ${escapeHtml(getType(q).intro(group.items.length))}`;
+    header.style.display = "block";
+    document.getElementById("questionCounter").textContent = `Câu ${label.num} · ${fmtNum(maxPoints(q))} điểm`;
+  } else {
+    header.style.display = "none";
+    document.getElementById("questionCounter").textContent = `Câu ${i + 1} / ${currentQuestions.length} · ${getType(q).label}`;
+  }
+  updateAnsweredStatus();
+  document.getElementById("questionText").innerHTML = (hasParts() ? `<strong>Câu ${label.num}.</strong> ` : "") + renderMath(q.question);
+  const img = document.getElementById("questionImage");
+  img.style.display = q.image ? "block" : "none";
+  if (q.image) img.src = q.image;
 
   const container = document.getElementById("optionsContainer");
-  const isShort = q.type === "short";
+  container.innerHTML = getType(q).renderExam(q, userAnswers[i], invalidInputs[i]);
+  const input = container.querySelector("[data-ans=input]");
+  if (input && invalidInputs[i] !== undefined) showInputError(input, getType(q).update(q, null, input).invalid);
 
-  if (isShort) {
-    const isNumber = q.answer_kind !== "text";
-    const currentVal = userAnswers[currentQuestionIndex] !== undefined ? String(userAnswers[currentQuestionIndex]) : "";
-    const placeholder = isNumber ? "Nhập đáp án số (ví dụ: 3/4, 0.75, 2 1/3, -5)..." : "Nhập câu trả lời bằng chữ...";
-    const helperText = isNumber ? "Hỗ trợ: số nguyên, số thập phân, phân số (a/b), hỗn số (a b/c)." : "Nhập câu trả lời chính xác.";
-
-    container.innerHTML = `
-      <div style="margin-bottom: 12px;">
-        <div style="margin-bottom: 8px;">
-          <span class="badge badge-blue">Tự luận ${isNumber ? "Số" : "Chữ"}</span>
-        </div>
-        <input 
-          type="text" 
-          id="shortAnswerInput" 
-          class="form-control" 
-          ${isNumber ? 'inputmode="decimal"' : ''} 
-          placeholder="${placeholder}" 
-          value="${escapeHtml(currentVal)}" 
-          autocomplete="off"
-          oninput="handleShortInput(this.value)"
-          onchange="handleShortChange(this.value)"
-          style="font-size: 1.05rem; padding: 12px;"
-        >
-        <div id="shortInputError" class="field-error" style="display: none;"></div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">${helperText}</div>
-        <div id="shortMathPreviewContainer" style="margin-top: 10px; display: ${currentVal ? 'block' : 'none'};">
-          <span style="font-size: 0.8rem; color: var(--text-muted);">Xem trước hiển thị:</span>
-          <div id="shortMathPreview" class="math-preview">${currentVal ? renderMath(currentVal) : ""}</div>
-        </div>
-      </div>
-    `;
-  } else {
-    // Trac nghiem (single)
-    const opts = Array.isArray(q.options) ? q.options : [];
-    let html = "";
-    opts.forEach((opt, idx) => {
-      const isSelected = userAnswers[currentQuestionIndex] === idx;
-      const selectedClass = isSelected ? "selected" : "";
-      html += `
-        <div class="option-item ${selectedClass}" onclick="selectOption(${idx})">
-          <span class="option-prefix">${PREFIXES[idx] || (idx + 1)}</span>
-          <span>${renderMath(opt.text)}</span>
-        </div>
-      `;
-    });
-    container.innerHTML = html;
-  }
-
-  // Cap nhat trang thai nut truoc/sau
-  document.getElementById("btnPrev").disabled = currentQuestionIndex === 0;
-  document.getElementById("btnNext").disabled = currentQuestionIndex === currentQuestions.length - 1;
+  document.getElementById("btnPrev").disabled = i === 0;
+  document.getElementById("btnNext").disabled = i === currentQuestions.length - 1;
 }
 
-// Chon dap an trac nghiem
-function selectOption(optionIndex) {
+// Xu ly 1 thao tac tra loi. commit=true: ghi log (click, roi o nhap)
+function handleAnswer(el, commit) {
   if (isSubmitting) return;
-  const prevSelection = userAnswers[currentQuestionIndex];
-  userAnswers[currentQuestionIndex] = optionIndex;
+  const i = currentQuestionIndex;
+  const q = currentQuestions[i];
+  const result = getType(q).update(q, userAnswers[i], el);
+  const isInput = el.tagName === "INPUT";
 
-  // Ghi log thao tac
-  const chosenPrefix = PREFIXES[optionIndex] || optionIndex;
-  if (prevSelection !== undefined && prevSelection !== optionIndex) {
-    tracker.addLog("DOI_DAP_AN", `Đổi đáp án câu ${currentQuestionIndex + 1} sang ${chosenPrefix}`, currentQuestionIndex + 1, chosenPrefix);
+  if (result.invalid) {
+    delete userAnswers[i];
+    invalidInputs[i] = el.value;
   } else {
-    tracker.addLog("CHON_DAP_AN", `Chọn đáp án câu ${currentQuestionIndex + 1} là ${chosenPrefix}`, currentQuestionIndex + 1, chosenPrefix);
+    delete invalidInputs[i];
+    if (result.value === undefined) delete userAnswers[i];
+    else userAnswers[i] = result.value;
   }
 
-  // Luu nhap local
-  StorageHelper.saveDraft(currentExam.id, userAnswers, deadline);
-
-  renderQuestion();
-}
-
-// Xu ly nhap dap an tu luan ngan (Debounce 300ms)
-function handleShortInput(val) {
-  clearTimeout(shortDebounceTimer);
-  shortDebounceTimer = setTimeout(() => {
-    validateAndSaveShortInput(val);
-  }, 300);
-}
-
-function handleShortChange(val) {
-  clearTimeout(shortDebounceTimer);
-  validateAndSaveShortInput(val);
-
-  const trimmed = val.trim();
-  if (tracker) {
-    tracker.addLog("NHAP_DAP_AN", `Nhập đáp án câu ${currentQuestionIndex + 1}: ${trimmed || "(để trống)"}`, currentQuestionIndex + 1, trimmed);
-  }
-}
-
-function validateAndSaveShortInput(val) {
-  const q = currentQuestions[currentQuestionIndex];
-  if (!q || q.type !== "short") return;
-
-  const inputEl = document.getElementById("shortAnswerInput");
-  const errorEl = document.getElementById("shortInputError");
-  const previewBox = document.getElementById("shortMathPreview");
-  const previewContainer = document.getElementById("shortMathPreviewContainer");
-  const answeredEl = document.getElementById("answeredStatus");
-
-  const trimmed = val.trim();
-
-  if (!trimmed) {
-    if (inputEl) inputEl.classList.remove("input-invalid");
-    if (errorEl) {
-      errorEl.textContent = "";
-      errorEl.style.display = "none";
-    }
-    if (previewContainer) previewContainer.style.display = "none";
-    delete userAnswers[currentQuestionIndex];
-    StorageHelper.saveDraft(currentExam.id, userAnswers, deadline);
-    if (answeredEl) answeredEl.textContent = `Đã trả lời: ${getAnsweredCount()} / ${currentQuestions.length}`;
-    return;
-  }
-
-  if (q.answer_kind === "number") {
-    const num = parseNumber(trimmed);
-    if (num === null) {
-      if (inputEl) inputEl.classList.add("input-invalid");
-      if (errorEl) {
-        errorEl.textContent = "Sai định dạng số. Ví dụ hợp lệ: 3/4, 0.75, 2 1/3, -5";
-        errorEl.style.display = "block";
-      }
-      if (previewContainer) previewContainer.style.display = "none";
-      // Xoa khoi userAnswers de khong tinh la da lam
-      delete userAnswers[currentQuestionIndex];
-    } else {
-      if (inputEl) inputEl.classList.remove("input-invalid");
-      if (errorEl) {
-        errorEl.textContent = "";
-        errorEl.style.display = "none";
-      }
-      userAnswers[currentQuestionIndex] = trimmed;
-      if (previewBox && previewContainer) {
-        previewContainer.style.display = "block";
-        previewBox.innerHTML = renderMath(trimmed);
-      }
-    }
-  } else {
-    // text
-    if (inputEl) inputEl.classList.remove("input-invalid");
-    if (errorEl) {
-      errorEl.textContent = "";
-      errorEl.style.display = "none";
-    }
-    userAnswers[currentQuestionIndex] = trimmed;
-    if (previewBox && previewContainer) {
-      previewContainer.style.display = "block";
-      previewBox.innerHTML = renderMath(trimmed);
-    }
+  if (commit && tracker) {
+    const detail = result.invalid ? `nhập sai định dạng "${el.value.trim()}"` : (result.log || "xoá đáp án");
+    tracker.addLog(isInput ? "NHAP_DAP_AN" : "CHON_DAP_AN", `Câu ${i + 1}: ${detail}`, i + 1, result.value ?? null);
   }
 
   StorageHelper.saveDraft(currentExam.id, userAnswers, deadline);
-  if (answeredEl) answeredEl.textContent = `Đã trả lời: ${getAnsweredCount()} / ${currentQuestions.length}`;
+
+  if (isInput) {
+    showInputError(el, result.invalid);
+    updateAnsweredStatus();
+  } else {
+    renderQuestion();
+  }
+}
+
+function showInputError(input, message) {
+  if (!input) return;
+  const box = input.parentElement.querySelector(".field-error");
+  input.classList.toggle("input-invalid", !!message);
+  box.textContent = message || "";
+  box.style.display = message ? "block" : "none";
+}
+
+// Luu o nhap dang go do (truoc khi chuyen cau / nop bai)
+function flushPendingInput() {
+  clearTimeout(inputDebounceTimer);
+  const input = document.querySelector("#optionsContainer [data-ans=input]");
+  if (input) handleAnswer(input, false);
 }
 
 // Dieu huong qua lai giua cac cau
 function navigateQuestion(step) {
-  // Luu lai neu dang o o nhap tu luan
-  const inputEl = document.getElementById("shortAnswerInput");
-  if (inputEl) {
-    validateAndSaveShortInput(inputEl.value);
-  }
-
+  flushPendingInput();
   const nextIndex = currentQuestionIndex + step;
   if (nextIndex >= 0 && nextIndex < currentQuestions.length) {
     currentQuestionIndex = nextIndex;
@@ -338,18 +298,17 @@ function updateTimerText() {
 function confirmSubmit() {
   if (isSubmitting) return;
 
-  // Luu o nhap hien tai neu co
-  const inputEl = document.getElementById("shortAnswerInput");
-  if (inputEl) {
-    validateAndSaveShortInput(inputEl.value);
-  }
+  flushPendingInput();
 
   const answeredCount = getAnsweredCount();
-  const totalCount = currentQuestions.length;
+  const totalCount = answerableIndexes().length;
+  const invalidList = Object.keys(invalidInputs).map(i => questionLabel(currentQuestions, Number(i)).text);
   let msg = `Bạn đã trả lời ${answeredCount} / ${totalCount} câu. Bạn có chắc chắn muốn nộp bài thi không?`;
 
   if (answeredCount < totalCount) {
-    msg = `Cảnh báo: Còn ${totalCount - answeredCount} câu chưa trả lời hoặc sai định dạng! Bạn có chắc chắn muốn nộp bài?`;
+    msg = `Cảnh báo: Còn ${totalCount - answeredCount} câu chưa trả lời đủ.`;
+    if (invalidList.length) msg += ` ${invalidList.join(", ")} đang sai định dạng nên sẽ tính là chưa làm.`;
+    msg += " Bạn vẫn muốn nộp bài?";
   }
 
   if (confirm(msg)) {
@@ -367,45 +326,9 @@ async function doSubmitExam() {
   btnSubmit.disabled = true;
   btnSubmit.textContent = "Đang nộp bài...";
 
-  // 1. Tinh diem
-  let correctCount = 0;
-  const formattedAnswers = [];
-
-  currentQuestions.forEach((q, idx) => {
-    const userVal = userAnswers[idx];
-    let isCorrect = false;
-
-    if (q.type === "short") {
-      isCorrect = isShortCorrect(userVal, q.answers, q.answer_kind);
-      if (isCorrect) correctCount++;
-      formattedAnswers.push({
-        question_index: idx + 1,
-        type: "short",
-        answer_kind: q.answer_kind || "number",
-        text_answer: userVal !== undefined && userVal !== null ? String(userVal) : "",
-        is_correct: isCorrect
-      });
-    } else {
-      // type === "single"
-      const selectedIndex = typeof userVal === "number" ? userVal : null;
-      if (selectedIndex !== null && q.options && q.options[selectedIndex]) {
-        const opt = q.options[selectedIndex];
-        if (opt.is_correct === true || opt.correct === true) {
-          isCorrect = true;
-        }
-      }
-      if (isCorrect) correctCount++;
-      formattedAnswers.push({
-        question_index: idx + 1,
-        type: "single",
-        selected_index: selectedIndex,
-        is_correct: isCorrect
-      });
-    }
-  });
-
+  // 1. Cham diem qua registry
+  const { entries, earned, total: maxTotal, autoMax, pending, score } = gradeAll(currentQuestions, userAnswers);
   const total = currentQuestions.length;
-  const score = total > 0 ? parseFloat(((correctCount / total) * 10).toFixed(1)) : 0;
   const durationSpent = Math.max(1, Math.round(((currentExam.duration_minutes || 45) * 60 - remainingSeconds) / 60));
 
   tracker.addLog("NOP_BAI", `Nộp bài thành công với số điểm ${score}/10`, null, null);
@@ -418,15 +341,21 @@ async function doSubmitExam() {
       score,
       total,
       durationSpent,
-      formattedAnswers,
+      entries,
       tracker.getLogs()
     );
 
     // Luu thanh cong -> Xoa ban nhap -> Chuyen sang man hinh Khoa Kiosk
     StorageHelper.clearDraft(currentExam.id);
 
-    document.getElementById("finalScore").textContent = score;
-    document.getElementById("finalSummary").textContent = `Đúng: ${correctCount} / ${total} câu (Thời gian: ${durationSpent} phút)`;
+    if (pending) {
+      // Con cau tu luan cho cham: chi bao diem phan tu dong
+      document.getElementById("finalScore").textContent = `${fmtNum(earned)} / ${fmtNum(autoMax)}`;
+      document.getElementById("finalSummary").textContent = `Điểm phần chấm tự động. ${pending} câu tự luận (${fmtNum(maxTotal - autoMax)} điểm) chờ giáo viên chấm. Thời gian: ${durationSpent} phút.`;
+    } else {
+      document.getElementById("finalScore").textContent = fmtNum(score);
+      document.getElementById("finalSummary").textContent = `Đạt ${fmtNum(earned)} / ${fmtNum(maxTotal)} điểm câu (Thời gian: ${durationSpent} phút)`;
+    }
     document.getElementById("viewExamPlay").style.display = "none";
     document.getElementById("viewLockScreen").style.display = "flex";
   } catch (err) {
