@@ -1,7 +1,7 @@
-# BẢN ĐẶC TẢ YÊU CẦU KỸ THUẬT VÀ KIẾN TRÚC HỆ THỐNG (SPEC)
+# BẢN ĐẶC TẢ YÊU CẦU KỸ THUẬT VÀ KIẾN TRÚC HỆ THỐNG (SPEC V2)
 
 Dự án: Safe Exam System (safe-seb)
-Ngày cập nhật: 17/11/2026
+Ngày cập nhật: 18/11/2026
 Mục đích: Bản đặc tả chi tiết toàn bộ luồng hoạt động, cấu trúc dữ liệu, giao diện và logic kỹ thuật của hệ thống kiểm tra bài thi an toàn.
 
 ---
@@ -9,129 +9,151 @@ Mục đích: Bản đặc tả chi tiết toàn bộ luồng hoạt động, c�
 ## 1. TỔNG QUAN HỆ THỐNG VÀ CÔNG NGHỆ
 
 ### 1.1. Mục tiêu cốt lõi
-- Xây dựng hệ thống thi trắc nghiệm có cơ chế khóa màn hình nghiêm ngặt, ngăn chặn thí sinh thoát ứng dụng hoặc can thiệp hệ thống trong và sau khi hoàn thành bài thi.
-- Đảm bảo an toàn dữ liệu tuyệt đối theo nguyên tắc "Lưu trước - Khóa sau": Dữ liệu bài làm phải được xác nhận lưu thành công trên máy chủ trước khi thiết bị chuyển sang trạng thái khóa cứng.
-- Phía thí sinh trên điện thoại đảm bảo tải nhẹ nhất (dưới 40 KB dữ liệu tải về, file cài đặt APK dưới 3 MB).
-- Phía quản trị viên (Admin) hỗ trợ tiếp nhận đề thi tự động qua định dạng PDF chuẩn hoặc JSON, phân quyền làm bài và theo dõi chi tiết toàn bộ nhật ký thao tác của thí sinh sau khi hoàn thành.
+- Xây dựng hệ thống thi trực tuyến có cơ chế khóa màn hình nghiêm ngặt (Kiosk Mode trên Android Native và Fullscreen trên trình duyệt web), ngăn chặn thí sinh thoát ứng dụng hoặc can thiệp hệ thống trong và sau khi hoàn thành bài thi.
+- Đảm bảo an toàn dữ liệu tuyệt đối theo nguyên tắc "Lưu trước - Khóa sau": Dữ liệu bài làm phải được xác nhận lưu thành công trên Supabase trước khi thiết bị chuyển sang trạng thái khóa cứng.
+- Phía thí sinh trên điện thoại đảm bảo tải nhẹ nhất (dưới 50 KB tải về, file cài đặt APK dưới 3 MB).
+- Quản trị viên (Admin) nhập đề qua định dạng JSON chuẩn (tự động nhận diện tiêu đề, thời lượng làm bài), tạo/sửa câu hỏi thủ công kèm xem trước công thức toán học KaTeX, hỗ trợ câu trắc nghiệm và câu tự luận ngắn, xóa cứng đề thi, và theo dõi chi tiết toàn bộ nhật ký thao tác (Action Logs) của thí sinh.
+- Toàn bộ giao diện tuân thủ quy chuẩn màu chủ đạo Xanh biển - Trắng, CSS tập trung tại một file duy nhất, không sử dụng icon hay emoji.
 
 ### 1.2. Công nghệ lựa chọn
-- Giao diện người dùng (Frontend): HTML5, CSS3, JavaScript thuần (Vanilla JS). Không sử dụng các thư viện hay framework cồng kềnh như React hoặc Vue nhằm tối ưu hóa bộ nhớ và tốc độ nạp trang.
-- Xử lý máy chủ (Backend): Chạy trên nền tảng Vercel Serverless Function kết hợp giao tiếp trực tiếp với cơ sở dữ liệu Supabase qua REST API.
+- Giao diện người dùng (Frontend): HTML5, CSS3, JavaScript thuần (Vanilla JS), không dùng framework (React/Vue/Angular) hay build tool phức tạp.
+- Công thức toán học: KaTeX tĩnh phiên bản 0.16.x được đóng gói trực tiếp trong thư mục `public/vendor/katex/`, hỗ trợ hoạt động offline và trong môi trường Kiosk nội bộ.
+- Cơ sở dữ liệu và Backend: Giao tiếp trực tiếp với cơ sở dữ liệu Supabase qua REST API với Row Level Security (RLS). Server Node.js nội bộ đóng vai trò phục vụ static files và bảo vệ đường dẫn (chống Path Traversal).
 - Ứng dụng di động (Android Client): Viết bằng ngôn ngữ Kotlin Native, nhúng WebView siêu nhẹ và kích hoạt trực tiếp API cấp hệ điều hành `startLockTask()` để khóa cứng thiết bị.
 
 ---
 
 ## 2. QUẢN TRỊ VIÊN (ADMIN PANEL)
 
-Giao diện quản trị hoạt động trên máy tính của giám thị, phục vụ các chức năng sau:
+Giao diện quản trị hoạt động trên máy tính của giám thị (`admin.html`), phục vụ các chức năng sau:
 
-### 2.1. Tiếp nhận đề thi (Upload Đề)
-Hệ thống hỗ trợ 2 định dạng đầu vào:
-1. File JSON:
-   - Dữ liệu có cấu trúc câu hỏi rõ ràng.
-   - Các phương án trả lời được đánh dấu thuộc tính `is_correct: true` cho đáp án đúng.
-   - Nạp trực tiếp vào hệ thống ngay lập tức mà không cần xử lý bóc tách.
-2. File PDF chuẩn (Digital PDF):
-   - Tiếp nhận file PDF số chuẩn (văn bản vector rõ nét, không phải chữ viết tay hay ảnh chụp mờ).
-   - Backend sử dụng thư viện bóc tách luồng văn bản sạch từ file PDF.
-   - Nhận diện các ký tự đáp án có vòng tròn bao quanh (dạng ký tự vòng tròn chuẩn như Ⓐ, Ⓑ, Ⓒ, Ⓓ hoặc nét vẽ hình tròn bao quanh chữ cái) để tự động xác định đáp án đúng `is_correct: true`.
-   - Hiển thị danh sách câu hỏi đã bóc tách trên màn hình để Admin xem lại và xác nhận.
+### 2.1. Đăng nhập và Xác thực
+- Cơ chế đăng nhập 2 bước bảo mật:
+  - Nhập tên tài khoản: Nếu nhập `admin`, hệ thống mới hiển thị ô nhập mật khẩu quản trị.
+  - Mật khẩu mặc định: `admin@123`. Xác thực thành công lưu session bảo vệ trang quản trị.
 
-### 2.2. Cấu hình và Phân quyền đề thi
-- Cài đặt thời gian làm bài: Thiết lập số phút làm bài riêng biệt cho từng đề thi (ví dụ: 15 phút, 45 phút, 60 phút).
-- Phân quyền tài khoản: Chỉ định cụ thể tên tài khoản thí sinh được phép truy cập và làm đề thi đó.
+### 2.2. Nhập đề thi bằng JSON
+- Hỗ trợ nhập trực tiếp mảng câu hỏi hoặc đối tượng JSON chứa thông tin tiêu đề và thời lượng:
+```json
+{
+  "title": "Đề thi Toán 11 học kỳ 1",
+  "duration_minutes": 45,
+  "questions": [
+    {
+      "type": "single",
+      "question": "Tính giá trị của biểu thức $\\frac{1}{2} + \\frac{1}{4}$",
+      "options": [
+        { "text": "$\\frac{3}{4}$", "is_correct": true },
+        { "text": "$\\frac{2}{6}$", "is_correct": false },
+        { "text": "$1$", "is_correct": false }
+      ]
+    },
+    {
+      "type": "short",
+      "question": "Tính $\\sqrt{16} \\div 8$",
+      "answer_kind": "number",
+      "answers": ["1/2", "0.5", "0,5"]
+    }
+  ]
+}
+```
+- Tự động điền tiêu đề (`title`) và thời lượng (`duration_minutes`) vào các ô nhập liệu khi import JSON.
+- Cơ chế tự sửa dấu gạch chéo ngược LaTeX: Tự động nhân đôi dấu `\` trước các từ khóa toán học (như `\frac` thành `\\frac`, `\sqrt` thành `\\sqrt`) để chống lỗi ký tự điều khiển trong JSON parser.
+- Modal Quy tắc định dạng (`#rulesModal`): Hiển thị bảng tra cứu công thức KaTeX kèm nút sao chép mẫu định dạng tiện lợi.
 
-### 2.3. Theo dõi kết quả và Nhật ký thao tác (Audit Logs)
-Sau khi thí sinh hoàn thành bài thi, hệ thống hiển thị bảng chi tiết phục vụ công tác giám sát:
-- Thông tin tổng quan: Tên thí sinh, tên đề thi, điểm số, số câu đúng trên tổng số câu, thời gian bắt đầu, thời gian nộp bài, tổng thời lượng hoàn thành.
-- Chi tiết bài làm: Hiển thị từng câu hỏi, đáp án thí sinh đã chọn và đáp án chính xác.
-- Nhật ký thao tác chi tiết trong lúc làm bài (Action Logs):
-  - Thời điểm đánh dấu chọn từng câu hỏi.
-  - Lịch sử thay đổi lựa chọn (nếu thí sinh đổi ý chọn sang đáp án khác).
-  - Ghi nhận các sự kiện vi phạm hoặc bất thường: Thao tác rời khỏi tab, thu nhỏ cửa sổ, chạm ra ngoài vùng làm bài, hoặc các lần thử thoát ứng dụng.
-- Lưu ý: Loại bỏ hoàn toàn tính năng xuất file CSV theo yêu cầu.
+### 2.3. Tạo và Chỉnh sửa câu hỏi thủ công
+- Modal thêm/sửa câu hỏi (`#questionModal`):
+  - Hỗ trợ chuyển đổi giữa câu Trắc nghiệm (`type: single`) và Tự luận ngắn (`type: short`).
+  - Ô nhập nội dung câu hỏi kèm khung xem trước công thức KaTeX trực tiếp theo thời gian thực.
+  - Câu trắc nghiệm: Cho phép thêm từ 2 đến 6 phương án, chọn đáp án đúng bằng nút chọn radio.
+  - Câu tự luận ngắn: Chọn kiểu đáp án (Số hoặc Chữ), nhập danh sách các đáp án chấp nhận (mỗi dòng một đáp án). Với kiểu Số, tự động kiểm tra cú pháp hợp lệ bằng `parseNumber`.
+- Hỗ trợ Sửa hoặc Xóa từng câu hỏi trực tiếp trên danh sách xem trước (Preview).
+- Nút "Hủy đề đang nhập" giúp xóa trắng toàn bộ danh sách câu hỏi đang soạn thảo và đặt lại biểu mẫu.
+
+### 2.4. Xuất bản và Quản lý danh sách đề thi
+- Xuất bản đề thi lên Supabase: Lưu thông tin đề thi và toàn bộ mảng câu hỏi có cấu trúc vào bảng `exams`.
+- Danh sách đề thi đã tạo: Hiển thị mã đề, tên đề thi, thời gian làm bài, ngày tạo.
+- Xóa cứng đề thi: Cung cấp nút "Xóa" cho từng đề thi trong danh sách. Khi quản trị viên xác nhận, hệ thống gửi lệnh `DELETE` trực tiếp lên Supabase để xóa vĩnh viễn đề thi khỏi cơ sở dữ liệu.
+
+### 2.5. Theo dõi kết quả và Nhật ký thao tác (Audit Logs)
+- Danh sách kết quả nộp bài: Hiển thị tên thí sinh, điểm số (/10), tổng số câu hỏi, thời lượng làm bài thực tế, thời điểm nộp bài.
+- Modal xem chi tiết kết quả:
+  - Chi tiết từng câu trả lời của thí sinh (câu trắc nghiệm hiển thị phương án chọn, câu tự luận hiển thị giá trị điền) kèm đánh giá Đúng/Sai.
+  - Toàn bộ nhật ký thao tác (Action Logs): Mốc thời gian chính xác, loại thao tác (`BAT_DAU`, `CHON_DAP_AN`, `DOI_DAP_AN`, `NHAP_DAP_AN`, `ROI_MAN_HINH`, `QUAY_LAI`, `MAT_TIEU_DIEM`, `HET_GIO`, `NOP_BAI`).
 
 ---
 
 ## 3. GIAO DIỆN THÍ SINH (EXAM CLIENT)
 
-Giao diện thí sinh được thiết kế tối ưu kép: Chạy thử nghiệm trực tiếp trên trình duyệt Web và hoạt động chính thức bên trong ứng dụng Android Kiosk Mode.
+Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt động trơn tru trên trình duyệt web và bên trong ứng dụng Android Kiosk Mode.
 
 ### 3.1. Cơ chế Tải chậm (Lazy Load)
-- Khi thí sinh đăng nhập: Hệ thống chỉ nạp danh sách tên các đề thi được phân quyền kèm thời gian làm bài quy định. Toàn bộ nội dung câu hỏi chưa được tải về máy.
-- Khi thí sinh bấm "Bắt đầu làm bài": Hệ thống mới gửi yêu cầu nạp nội dung câu hỏi dạng JSON siêu nhẹ (khoảng 5 KB đến 10 KB) về máy, giúp tiết kiệm băng thông và chống lộ đề trước giờ thi.
+- Khi thí sinh đăng nhập: Nạp danh sách các đề thi hiện có (chỉ lấy mã, tiêu đề, thời lượng).
+- Khi thí sinh bấm "Vào làm bài": Mới tải chi tiết nội dung câu hỏi của đề thi đã chọn về bộ nhớ máy, tiết kiệm tối đa băng thông và đảm bảo tính bảo mật.
 
 ### 3.2. Quá trình làm bài thi
-- Kích hoạt chế độ kiểm soát: Ứng dụng Android tự động bật `startLockTask()` để vô hiệu hóa thanh thông báo, nút Home, nút Back và các cử chỉ vuốt của hệ điều hành. Khi chạy trên trình duyệt web, hệ thống tự động khóa toàn màn hình (Fullscreen).
-- Đồng hồ đếm ngược: Hoạt động chính xác theo số phút đã được cấu hình trong đề thi. Tự động nộp bài khi thời gian về 00:00.
-- Lưu trữ nháp an toàn (Offline Resilience): Mọi lựa chọn của thí sinh được lưu ngay lập tức vào bộ nhớ tạm `localStorage`. Nếu xảy ra sự cố sập nguồn hoặc tắt app đột ngột, toàn bộ tiến trình làm bài sẽ được phục hồi nguyên vẹn khi mở lại.
-- Bộ ghi nhận thao tác (Action Tracker): Ghi lại toàn bộ dòng sự kiện kèm mốc thời gian chính xác (Timestamp) để gửi về máy chủ khi nộp bài.
+- Kích hoạt Kiosk Mode: Trên ứng dụng Android, gọi `window.KioskBridge.startLock()` để khóa phím cứng, thanh thông báo và cử chỉ. Trên trình duyệt web, tự động bật chế độ toàn màn hình.
+- Hiển thị nội dung câu hỏi và công thức toán học: Mọi công thức KaTeX trong đề bài và các phương án đều được hiển thị sắc nét bằng engine KaTeX tĩnh.
+- Câu trắc nghiệm (`single`): Giao diện phương án dạng nút cảm ứng lớn, đổi màu xanh khi chọn.
+- Câu tự luận ngắn (`short`):
+  - Hiển thị ô nhập văn bản (kích hoạt `inputmode="decimal"` nếu là kiểu Số).
+  - Khung xem trước KaTeX trực tiếp bên dưới ô nhập giúp thí sinh kiểm tra lại cách hiển thị đáp án.
+  - Kiểm tra tính hợp lệ trực tiếp (Debounce 300ms): Nếu là kiểu Số, kiểm tra bằng hàm `parseNumber`. Nếu sai định dạng (ví dụ nhập `3//4`), viền đỏ cảnh báo và không tính vào số câu đã trả lời.
+  - Chấm điểm số tương đương: Tự động công nhận các dạng biểu diễn tương đương của cùng một số (ví dụ: `3/4` = `0.75` = `0,75` = `6/8`).
+- Lưu trữ nháp an toàn (Offline Draft): Mọi thao tác làm bài được lưu tự động vào `localStorage` kèm mốc thời hạn `deadline`. Nếu bị tắt nguồn hoặc tải lại trang, bài làm và thời gian còn lại sẽ được khôi phục nguyên vẹn.
+- Bộ đếm thời gian: Tính toán chính xác theo mốc deadline tuyệt đối (`deadline - Date.now()`), không bị ảnh hưởng khi tab trình duyệt bị throttle trong nền.
 
 ### 3.3. Cơ chế Nộp bài và Khóa an toàn ("Lưu trước - Khóa sau")
-1. Thí sinh bấm "Nộp bài" hoặc hết giờ làm bài.
-2. Hệ thống tính điểm và gửi gói dữ liệu (Điểm số, câu trả lời, nhật ký thao tác) lên Supabase qua giao thức HTTPS.
-3. Kiểm tra phản hồi từ Supabase:
-   - Nếu gặp lỗi kết nối hoặc mất mạng: Giữ nguyên bài làm trên màn hình, hiển thị cảnh báo mất mạng kèm nút "Thử lại". Tuyệt đối không khóa máy để tránh làm mất bài của thí sinh.
-   - Nếu Supabase phản hồi HTTP 201 (Xác nhận lưu thành công): Chuyển màn hình sang trạng thái Khóa an toàn.
-4. Trạng thái Khóa an toàn:
-   - Hiển thị thông báo lớn: "Bài thi đã được nộp thành công và lưu trên hệ thống. Thiết bị đang ở chế độ giám sát".
-   - Khóa cứng màn hình, vô hiệu hóa mọi thao tác thoát.
-   - Cung cấp ô nhập mật khẩu giám thị. Chỉ khi giám thị nhập đúng mã bảo mật `PROCTOR_UNLOCK_PASSWORD`, ứng dụng mới gọi `stopLockTask()` để giải phóng thiết bị về trạng thái sử dụng bình thường.
+1. Thí sinh bấm "Nộp bài" hoặc đồng hồ đếm ngược về 00:00.
+2. Kiểm tra xác nhận: Nhắc nhở số câu đã trả lời và cảnh báo nếu còn câu chưa làm hoặc sai định dạng.
+3. Chấm điểm tự động và gửi gói dữ liệu lên Supabase qua REST API.
+4. Kiểm tra phản hồi từ Supabase:
+   - Nếu gặp lỗi kết nối hoặc mất mạng: Giữ nguyên toàn bộ bài làm, thông báo lỗi mạng và cho phép thí sinh bấm "Thử nộp lại". Tuyệt đối không khóa máy để tránh làm mất bài của thí sinh.
+   - Nếu Supabase xác nhận lưu thành công (HTTP 201/200): Xóa bộ nhớ tạm và chuyển sang màn hình Khóa an toàn.
+5. Màn hình Khóa an toàn:
+   - Hiển thị điểm số và thông báo bài thi đã nộp thành công.
+   - Khóa cứng màn hình, chỉ cho phép mở khóa khi giám thị nhập đúng mật khẩu bảo vệ (`PROCTOR_UNLOCK_PASSWORD`).
 
 ---
 
 ## 4. CẤU TRÚC DỮ LIỆU SUPABASE
 
 ### 4.1. Bảng `exams` (Quản lý đề thi)
-- `id`: Định danh duy nhất (Khóa chính, tự tăng).
-- `title`: Tên đề thi (Text).
-- `duration_minutes`: Thời gian làm bài tính theo phút (Integer).
-- `assigned_to`: Tên tài khoản thí sinh được làm (Text).
-- `questions`: Dữ liệu câu hỏi và đáp án chuẩn định dạng JSONB.
-- `created_at`: Thời gian tạo đề (Timestamp with time zone).
+```sql
+create table if not exists exams (
+  id bigint generated by default as identity primary key,
+  title text not null,
+  duration_minutes int default 45,
+  assigned_to text default 'all',
+  questions jsonb not null default '[]'::jsonb,
+  created_at timestamp with time zone default now()
+);
+```
 
-### 4.2. Bảng `exam_results` (Lịch sử làm bài và Nhật ký thao tác)
-- `id`: Định danh duy nhất (Khóa chính, tự tăng).
-- `exam_id`: Mã đề thi liên kết (Integer).
-- `student_name`: Tên tài khoản thí sinh (Text).
-- `score`: Điểm số đạt được (Numeric).
-- `total_questions`: Tổng số câu hỏi trong đề (Integer).
-- `answers`: Chi tiết các câu thí sinh đã chọn (JSONB).
-- `action_logs`: Toàn bộ nhật ký thao tác, mốc thời gian chọn/đổi đáp án, sự kiện rời màn hình (JSONB).
-- `submitted_at`: Thời điểm nộp bài thành công (Timestamp with time zone).
+### 4.2. Bảng `exam_results` (Kết quả thi và Nhật ký thao tác)
+```sql
+create table if not exists exam_results (
+  id bigint generated by default as identity primary key,
+  exam_id bigint references exams(id) on delete set null,
+  student_name text not null,
+  score numeric not null,
+  total_questions int not null,
+  duration_minutes int not null,
+  answers jsonb default '[]'::jsonb,
+  action_logs jsonb default '[]'::jsonb,
+  submitted_at timestamp with time zone default now()
+);
+```
 
 ---
 
-## 5. CẤU TRÚC THƯ MỤC MÃ NGUỒN DỰ KIẾN
+## 5. NGUYÊN TẮC THIẾT KẾ GIAO DIỆN VÀ MÃ NGUỒN
 
-```text
-safe-seb/
-├── .env                          # Biến môi trường bảo mật (Supabase, Mật khẩu giám thị)
-├── .gitignore                    # Loại trừ các file bảo mật khỏi Git
-├── spec.md                       # Bản đặc tả kỹ thuật và kiến trúc hệ thống
-├── README.md                     # Hướng dẫn tổng quan dự án
-├── vercel.json                   # Cấu hình triển khai trên Vercel
-├── package.json                  # Khai báo các gói phụ thuộc backend
-│
-├── api/                          # BACKEND SERVERLESS (Chạy trên Vercel)
-│   └── parse-pdf.js              # Xử lý đọc văn bản PDF chuẩn và nhận diện đáp án khoanh tròn
-│
-├── public/                       # FRONTEND (Web tĩnh chạy trên trình duyệt và WebView)
-│   ├── index.html                # Màn hình đăng nhập phân quyền (Admin / Thí sinh)
-│   │
-│   ├── admin.html                # Bảng điều khiển quản trị viên
-│   ├── admin.js                  # Logic xử lý PDF/JSON, cài đặt thời gian, xem kết quả và log
-│   ├── admin.css                 # Giao diện quản trị hiển thị trên máy tính
-│   │
-│   ├── exam.html                 # Giao diện làm bài thi (Chạy thử web hoặc nạp vào Android)
-│   ├── exam.js                   # Logic làm bài, Lazy Load, đếm giờ, ghi nhật ký, khóa màn hình
-│   └── exam.css                  # Giao diện bài thi tối giản, tương thích hoàn hảo thiết bị di động
-│
-└── android/                      # CLIENT ANDROID NATIVE (APK dưới 3 MB)
-    ├── build.gradle.kts          # Cấu hình Gradle tối giản
-    └── src/main/
-        ├── AndroidManifest.xml   # Khai báo quyền Kiosk Mode và toàn màn hình
-        └── java/com/safe/exam/
-            ├── MainActivity.kt   # Nạp WebView trỏ tới exam.html và quản lý startLockTask()
-            └── KioskBridge.kt    # Cầu nối nhận lệnh khóa và mở khóa từ JavaScript
-```
+1. Tối giản tối đa (Ponytail & DRY):
+   - Không sử dụng thư viện ngoài nếu API thuần đáp ứng được.
+   - Toàn bộ giao diện tập trung tại `public/css/style.css` với bảng màu chuẩn: Xanh biển (`#1d4ed8`), Trắng (`#ffffff`), Nền xám nhạt (`#f8fafc`).
+   - Tuyệt đối không sử dụng icon hay emoji ở bất kỳ đâu trên giao diện và mã nguồn.
+2. Chuẩn hóa tiếng Việt:
+   - Toàn bộ văn bản giao diện người dùng có đầy đủ dấu câu tiếng Việt chuẩn xác.
+3. Bảo vệ dữ liệu và đường dẫn:
+   - Server Node.js chuẩn hóa đường dẫn với `path.normalize`, chặn hoàn toàn Path Traversal.

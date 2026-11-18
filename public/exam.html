@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
-  <title>Thi truc tuyen - Safe Exam</title>
+  <title>Thi trực tuyến - Safe Exam</title>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -20,11 +21,11 @@
     <!-- Man hinh 1: Danh sach de thi (Lazy Load) -->
     <div id="viewExamList">
       <div style="margin-bottom: 16px;">
-        <h2>Danh sach de thi</h2>
-        <p>Chon de thi ben duoi de bat dau lam bai.</p>
+        <h2>Danh sách đề thi</h2>
+        <p>Chọn đề thi bên dưới để bắt đầu làm bài.</p>
       </div>
       <div id="examListContainer">
-        <p style="text-align: center; padding: 20px;">Dang tai danh sach de thi...</p>
+        <p style="text-align: center; padding: 20px;">Đang tải danh sách đề thi...</p>
       </div>
     </div>
 
@@ -32,21 +33,21 @@
     <div id="viewExamPlay" style="display: none;">
       <div class="card" style="margin-top: 8px;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 0.85rem; color: var(--text-muted);">
-          <span id="questionCounter">Cau 1 / 10</span>
-          <span id="answeredStatus">Da chon: 0</span>
+          <span id="questionCounter">Câu 1 / 10</span>
+          <span id="answeredStatus">Đã trả lời: 0 / 10</span>
         </div>
         
-        <h3 id="questionText" style="margin-bottom: 20px; font-size: 1.15rem; line-height: 1.4;">Noi dung cau hoi</h3>
+        <h3 id="questionText" style="margin-bottom: 20px; font-size: 1.15rem; line-height: 1.5;">Nội dung câu hỏi</h3>
         <div id="optionsContainer"></div>
       </div>
 
       <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 16px;">
-        <button id="btnPrev" class="btn btn-outline" style="flex: 1;" onclick="navigateQuestion(-1)">Cau truoc</button>
-        <button id="btnNext" class="btn btn-outline" style="flex: 1;" onclick="navigateQuestion(1)">Cau tiep</button>
+        <button id="btnPrev" class="btn btn-outline" style="flex: 1;" onclick="navigateQuestion(-1)">Câu trước</button>
+        <button id="btnNext" class="btn btn-outline" style="flex: 1;" onclick="navigateQuestion(1)">Câu tiếp</button>
       </div>
 
       <div style="margin-top: 24px;">
-        <button id="btnSubmit" class="btn btn-primary btn-block" style="padding: 14px; font-size: 1rem;" onclick="confirmSubmit()">Nop bai thi</button>
+        <button id="btnSubmit" class="btn btn-primary btn-block" style="padding: 14px; font-size: 1rem;" onclick="confirmSubmit()">Nộp bài thi</button>
       </div>
     </div>
   </main>
@@ -54,39 +55,40 @@
   <!-- Man hinh 3: Khoa sau khi nop bai (Lockout Overlay) -->
   <div id="viewLockScreen" class="overlay" style="display: none;">
     <div class="lock-screen">
-      <div class="lock-title">DA NOP BAI THANH CONG</div>
-      <p style="margin-bottom: 8px;">Ket qua bai thi cua ban:</p>
+      <div class="lock-title">ĐÃ NỘP BÀI THÀNH CÔNG</div>
+      <p style="margin-bottom: 8px;">Kết quả bài thi của bạn:</p>
       <div id="finalScore" class="score-display">--</div>
-      <p id="finalSummary" style="font-size: 0.95rem; margin-bottom: 16px;">Dung: -- / -- cau</p>
+      <p id="finalSummary" style="font-size: 0.95rem; margin-bottom: 16px;">Đúng: -- / -- câu</p>
       
       <div class="alert-box alert-info" style="text-align: left; margin-bottom: 24px;">
-        Thiet bi dang o che do bao ve cua phong thi. Giu nguyen man hinh va cho giam thi mo khoa de roi phong.
+        Thiết bị đang ở chế độ bảo vệ của phòng thi. Giữ nguyên màn hình và chờ giám thị mở khóa để rời phòng thi.
       </div>
 
-      <button class="btn btn-outline btn-block" style="font-size: 0.85rem;" onclick="showUnlockDialog()">Mo khoa thiet bi (Giam thi)</button>
+      <button class="btn btn-outline btn-block" style="font-size: 0.85rem;" onclick="showUnlockDialog()">Mở khóa thiết bị (Giám thị)</button>
     </div>
   </div>
 
   <!-- Hop thoai nhap ma giam thi de mo khoa -->
   <div id="viewUnlockModal" class="overlay" style="display: none; z-index: 110;">
     <div class="lock-screen" style="max-width: 360px;">
-      <h3 style="margin-bottom: 12px;">Xac nhan Giam thi</h3>
-      <p style="margin-bottom: 16px;">Nhap mat khau giam thi de giai phong thiet bi.</p>
+      <h3 style="margin-bottom: 12px;">Xác nhận Giám thị</h3>
+      <p style="margin-bottom: 16px;">Nhập mật khẩu giám thị để giải phóng thiết bị.</p>
       
       <form onsubmit="event.preventDefault(); verifyUnlock();">
         <div class="form-group">
-          <input type="password" id="proctorInput" class="form-control" placeholder="Nhap mat khau..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
+          <input type="password" id="proctorInput" class="form-control" placeholder="Nhập mật khẩu..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
         </div>
-        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mat khau khong dung!</div>
+        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mật khẩu không đúng!</div>
 
         <div style="display: flex; gap: 10px;">
-          <button type="button" class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Huy</button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Xac nhan</button>
+          <button type="button" class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Hủy</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Xác nhận</button>
         </div>
       </form>
     </div>
   </div>
 
+  <script src="vendor/katex/katex.min.js"></script>
   <script src="js/app.js"></script>
   <script src="js/exam.js"></script>
 </body>

@@ -372,35 +372,6 @@ tr:hover td {
 }
 
 
-/* Dropzone keo tha PDF */
-.dropzone {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 32px 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-.dropzone:hover,
-.dropzone.dragover {
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
-
-.dropzone-title {
-  font-weight: 600;
-  color: var(--text-main);
-  margin-bottom: 4px;
-}
-
-.dropzone-subtitle {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
 /* Khung ma nguon Code Block */
 .code-block {
   background: #f1f5f9;
@@ -419,4 +390,51 @@ tr:hover td {
 textarea.form-control {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   resize: vertical;
+}
+
+/* Input validation styles */
+.input-invalid {
+  border-color: #ef4444 !important;
+  background-color: #fef2f2 !important;
+}
+
+.input-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+.field-error {
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+/* Question action buttons */
+.q-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.q-actions button {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+}
+
+/* Math Preview Box */
+.math-preview {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  color: var(--primary);
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+/* Formula table in rules */
+.math-table td {
+  padding: 8px 10px;
+  font-size: 0.85rem;
 }

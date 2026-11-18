@@ -1,45 +1,46 @@
 # Safe Exam Browser (safe-seb)
 
-He thong thi truc tuyen an toan tich hop Kiosk Mode, giam sat thao tac (Audit Logs) va dong bo ket qua truc tiep voi Supabase.
+Hệ thống thi trực tuyến an toàn tích hợp Kiosk Mode, giám sát thao tác (Action Logs) và đồng bộ kết quả trực tiếp với Supabase.
 
 ---
 
-## 1. Khoi chay he thong (Backend va Frontend)
+## 1. Khởi chạy hệ thống
 
-He thong tich hop ca Backend (API boc tach PDF) va Frontend (Web app) trong mot may chu thong nhat:
+Hệ thống sử dụng Node.js thuần phục vụ file tĩnh và kết nối trực tiếp với Supabase REST API:
 
 ```bash
-# Cai dat dependencies
+# Cài đặt dependencies
 npm install
 
-# Khoi chay may chu (Backend API va Frontend)
+# Khởi chạy máy chủ
 npm start
 ```
 
-- Dia chi truy cap: http://localhost:3000 (hoac http://localhost:3000/index.html)
+- Địa chỉ truy cập: http://localhost:3000 (hoặc http://localhost:3000/index.html)
 
 ---
 
-## 2. Huong dan dang nhap
+## 2. Hướng dẫn đăng nhập
 
-| Vai tro | Cach dang nhap | Quyen han |
+| Vai trò | Cách đăng nhập | Quyền hạn |
 |---|---|---|
-| **Thi sinh (User)** | Nhap bat ky ten tai khoan nao (vd: nam, an...) | **Vao thang phong thi**, khong can mat khau. Nhan tat ca de thi hien co. |
-| **Quan tri (Admin)** | Nhap tai khoan: `admin`<br>Mat khau: `admin@123` | Quan ly de thi (Upload JSON/PDF), xem ket qua va toan bo nhat ky thao tac. |
+| **Thí sinh (User)** | Nhập bất kỳ tên tài khoản nào (ví dụ: nam, an, hoa...) | **Vào thẳng phòng thi**, không cần mật khẩu. Nhận danh sách tất cả đề thi hiện có. |
+| **Quản trị (Admin)** | Nhập tài khoản: `admin`<br>Mật khẩu: `admin@123` | Nhập đề thi bằng JSON (tự điền tiêu đề/thời lượng), tạo/sửa câu hỏi thủ công kèm công thức KaTeX, xóa cứng đề thi, xem kết quả và toàn bộ nhật ký thao tác. |
 
 ---
 
-## 3. Cau truc du an
+## 3. Cấu trúc dự án
 
 ```text
 safe-seb/
-├── android/        # Ung dung Android Kiosk Mode Native (Kotlin)
-├── api/            # Backend API (boc tach cau hoi tu file PDF)
-├── database/       # Schema SQL va phan quyen RLS Supabase
-├── docs/           # Tai lieu dac ta ky thuat chi tiet
-├── public/         # Frontend Web App (HTML, CSS, JS thuan)
-│   ├── css/        # Stylesheets
-│   └── js/         # Logic app, admin va exam
-├── server.js       # May chu phuc vu API va Frontend
-└── package.json
+├── android/            # Ứng dụng Android Kiosk Mode Native (Kotlin)
+├── database/           # Schema SQL và phân quyền RLS Supabase
+├── docs/               # Bản đặc tả kỹ thuật chi tiết (spec.md)
+├── public/             # Giao diện Web (HTML, CSS, JS thuần)
+│   ├── css/            # Tập trung toàn bộ giao diện (style.css)
+│   ├── js/             # Logic ứng dụng (app.js, admin.js, exam.js)
+│   └── vendor/         # Thư viện tĩnh KaTeX (katex.min.js, css, fonts)
+├── server.js           # Máy chủ Node.js phục vụ static files & chặn path traversal
+├── package.json        # Cấu hình dự án
+└── .env                # Biến môi trường kết nối Supabase
 ```

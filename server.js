@@ -1,7 +1,6 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const parsePdfHandler = require("./api/parse-pdf");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.normalize(path.join(__dirname, "public"));
@@ -13,16 +12,13 @@ const MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
-  ".svg": "image/svg+xml"
+  ".svg": "image/svg+xml",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf"
 };
 
-const server = http.createServer(async (req, res) => {
-  // 1. Dinh tuyen API
-  if (req.url === "/api/parse-pdf" || req.url.startsWith("/api/parse-pdf?")) {
-    return parsePdfHandler(req, res);
-  }
-
-  // 2. Phuc vu static files trong public/
+const server = http.createServer((req, res) => {
   let reqPath = req.url.split("?")[0];
   if (reqPath === "/") reqPath = "/index.html";
 
