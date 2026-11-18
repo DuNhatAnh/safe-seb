@@ -2,6 +2,39 @@
 const SUPABASE_URL = "https://twavyhrlphhqsqiqvrzq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Rsbi9aTsXeusrjzg0q2Eig_FYGZW_hH";
 const PROCTOR_PASSWORD_DEFAULT = "123456";
+const PREFIXES = "ABCDEF";
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Chuan hoa danh sach cau hoi ve {question, options:[{text,is_correct}]}
+// strict=true: bat buoc dung 1 dap an dung (JSON). strict=false: cho phep thieu dap an (PDF, admin sua tay)
+function normalizeQuestions(data, strict = true) {
+  const errors = [];
+  if (!Array.isArray(data) || data.length === 0) {
+    return { questions: [], errors: ["Du lieu phai la mot mang co it nhat 1 cau hoi."] };
+  }
+  const questions = data.map((q, i) => {
+    const n = i + 1;
+    const text = typeof q?.question === "string" ? q.question.trim() : "";
+    if (!text) errors.push(`Cau ${n}: thieu truong "question".`);
+    const rawOpts = Array.isArray(q?.options) ? q.options : [];
+    const options = rawOpts.map(o => typeof o === "string"
+      ? { text: o.trim(), is_correct: false }
+      : { text: String(o?.text ?? "").trim(), is_correct: o?.is_correct === true || o?.correct === true });
+    if (options.length < 2 || options.length > PREFIXES.length) errors.push(`Cau ${n}: can tu 2 den ${PREFIXES.length} phuong an.`);
+    if (options.some(o => !o.text)) errors.push(`Cau ${n}: co phuong an rong.`);
+    const correct = options.filter(o => o.is_correct).length;
+    if (correct > 1 || (strict && correct !== 1)) errors.push(`Cau ${n}: can dung 1 dap an dung (hien co ${correct}).`);
+    return { question: text, options };
+  });
+  return { questions, errors };
+}
+
+function hasCorrectAnswer(q) {
+  return q.options.filter(o => o.is_correct).length === 1;
+}
 
 // Ham goi API Supabase dung chung (DRY)
 async function supabaseRequest(endpoint, method = "GET", body = null) {
@@ -122,9 +155,9 @@ class ActionTracker {
 
 // Bo quan ly bo nho tam LocalStorage de phong mat mang / tat nguon
 const StorageHelper = {
-  saveDraft(examId, answers, timeLeft) {
+  saveDraft(examId, answers, deadline) {
     try {
-      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, timeLeft, savedAt: Date.now() }));
+      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, deadline, savedAt: Date.now() }));
     } catch (e) {
       console.warn("Khong the luu nhap:", e);
     }
@@ -140,6 +173,18 @@ const StorageHelper = {
   },
 
   clearDraft(examId) {
-    localStorage.removeItem(`safe_exam_draft_${examId}`);
+    try {
+      localStorage.removeItem(`safe_exam_draft_${examId}`);
+    } catch (e) { }
   }
 };
+
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    PREFIXES,
+    escapeHtml,
+    normalizeQuestions,
+    hasCorrectAnswer
+  };
+}

@@ -73,15 +73,17 @@
       <h3 style="margin-bottom: 12px;">Xac nhan Giam thi</h3>
       <p style="margin-bottom: 16px;">Nhap mat khau giam thi de giai phong thiet bi.</p>
       
-      <div class="form-group">
-        <input type="password" id="proctorInput" class="form-control" placeholder="Nhap mat khau..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
-      </div>
-      <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mat khau khong dung!</div>
+      <form onsubmit="event.preventDefault(); verifyUnlock();">
+        <div class="form-group">
+          <input type="password" id="proctorInput" class="form-control" placeholder="Nhap mat khau..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
+        </div>
+        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mat khau khong dung!</div>
 
-      <div style="display: flex; gap: 10px;">
-        <button class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Huy</button>
-        <button class="btn btn-primary" style="flex: 1;" onclick="verifyUnlock()">Xac nhan</button>
-      </div>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Huy</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Xac nhan</button>
+        </div>
+      </form>
     </div>
   </div>
 

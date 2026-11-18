@@ -1,19 +1,16 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quan tri - Safe Exam</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
   <header class="app-header">
     <div class="brand-title">Safe Exam - Bang quan tri</div>
     <div style="display: flex; gap: 8px;">
-      <button onclick="logoutAdmin()" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Dang
-        xuat</button>
+      <button onclick="logoutAdmin()" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Dang xuat</button>
     </div>
   </header>
 
@@ -28,54 +25,49 @@
     <div id="tabUpload">
       <div class="card">
         <h2 style="margin-bottom: 12px;">Tao de thi moi</h2>
-        <p style="margin-bottom: 16px;">Tiep nhan de thi qua file JSON hoac file PDF. De thi tao xong se tu dong phat
-          cho tat ca thi sinh.</p>
+        <p style="margin-bottom: 16px;">Tiep nhan de thi qua file PDF hoac dán truc tiep JSON. De thi xuat ban se ap dung cho tat ca thi sinh.</p>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
           <div class="form-group">
-            <label class="form-label">Tieu de de thi</label>
+            <label class="form-label" for="examTitle">Tieu de de thi</label>
             <input type="text" id="examTitle" class="form-control" placeholder="Vi du: Kiem tra Toan hoc ki 1" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Thoi gian lam bai (phut)</label>
+            <label class="form-label" for="examDuration">Thoi gian lam bai (phut)</label>
             <input type="number" id="examDuration" class="form-control" value="45" min="1" required>
           </div>
         </div>
 
-        <div
-          style="margin-bottom: 16px; padding: 10px 14px; background: #f1f5f9; border-radius: var(--radius); font-size: 0.85rem; color: var(--text-muted);">
-          <strong style="color: var(--text);">Pham vi:</strong> De thi xuat ban se ap dung cho <strong>tat ca thi
-            sinh</strong> (khong can phan quyen tung tai khoan).
-        </div>
-
-        <!-- Chon file PDF hoac JSON -->
-        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-          <div style="flex: 1; min-width: 220px;">
-            <label class="form-label">Cach 1: Tai len file JSON</label>
-            <input type="file" id="fileJson" accept=".json" class="form-control" onchange="handleJsonUpload(event)">
-          </div>
-          <div style="flex: 1; min-width: 220px;">
-            <label class="form-label">Cach 2: Tai len file PDF chuan</label>
-            <input type="file" id="filePdf" accept=".pdf" class="form-control" onchange="handlePdfUpload(event)">
+        <!-- Hang nut hanh dong import -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <label class="form-label" style="margin-bottom: 0;">Nhap noi dung de thi</label>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" onclick="openRulesModal()">Quy tac dinh dang</button>
+            <button type="button" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" onclick="openJsonModal()">Nhap JSON</button>
           </div>
         </div>
 
-        <div id="uploadStatus" style="display: none; padding: 10px; margin-bottom: 14px;" class="alert-box alert-info">
+        <!-- Dropzone keo tha PDF -->
+        <div id="pdfDropzone" class="dropzone" style="margin-bottom: 16px;">
+          <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;">
+          <div class="dropzone-title">Keo tha file PDF vao day hoac bam de chon</div>
+          <div class="dropzone-subtitle">Ho tro PDF van ban xuat tu Word/Docs (toi da 10MB)</div>
         </div>
+
+        <div id="uploadStatus" style="display: none; padding: 10px; margin-bottom: 14px;" class="alert-box alert-info"></div>
 
         <!-- Khung xem truoc cau hoi -->
         <div id="previewSection" style="display: none;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <h3>Danh sach cau hoi (<span id="previewCount">0</span> cau)</h3>
-            <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem;"
-              onclick="addSampleQuestion()">Them cau thu cong</button>
-          </div>
-          <div id="previewList"
-            style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;">
+            <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem;" onclick="addSampleQuestion()">Them cau thu cong</button>
           </div>
 
-          <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px;" onclick="saveExam()">Xuat
-            ban de thi len he thong</button>
+          <div id="previewWarnings" class="alert-box alert-danger" style="display: none; padding: 10px; margin-bottom: 12px; font-size: 0.85rem;"></div>
+
+          <div id="previewList" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 16px;"></div>
+
+          <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px;" onclick="saveExam()">Xuat ban de thi len he thong</button>
         </div>
       </div>
 
@@ -138,27 +130,102 @@
     </div>
   </main>
 
-  <!-- Modal xem chi tiet bai lam va Nhat ky thao tac -->
+  <!-- Modal 1: Quy tac dinh dang -->
+  <div id="rulesModal" class="overlay" style="display: none; z-index: 120;">
+    <div class="lock-screen" style="max-width: 680px; text-align: left; max-height: 85vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <h3>Quy tac dinh dang cau hoi</h3>
+        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeRulesModal()">Dong</button>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong>1. Dinh dang JSON (Moi cau 2-6 phuong an, dung 1 dap an is_correct: true)</strong>
+          <button id="btnCopyJsonSample" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" onclick="copySampleText('jsonSampleCode', 'btnCopyJsonSample')">Sao chep</button>
+        </div>
+        <pre id="jsonSampleCode" class="code-block">[
+  {
+    "question": "Thu do cua Viet Nam la gi?",
+    "options": [
+      { "text": "Ha Noi", "is_correct": true },
+      { "text": "Hue", "is_correct": false },
+      { "text": "Da Nang", "is_correct": false },
+      { "text": "TP.HCM", "is_correct": false }
+    ]
+  }
+]</pre>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong>2. Dinh dang PDF (Xuat tu Word/Docs, khong phai ban scan)</strong>
+          <button id="btnCopyPdfSample" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" onclick="copySampleText('pdfSampleCode', 'btnCopyPdfSample')">Sao chep</button>
+        </div>
+        <pre id="pdfSampleCode" class="code-block">Cau 1: Thu do cua Viet Nam la gi?
+*A. Ha Noi
+B. Hue
+C. Da Nang
+D. TP.HCM
+
+Cau 2: 2 + 3 = ?
+A. 4
+B. 5
+C. 6
+D. 7
+Dap an: B</pre>
+      </div>
+
+      <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+        <strong style="color: var(--text-main);">Cac luu y quan trong khi soan de:</strong>
+        <ul style="padding-left: 20px; margin-top: 4px;">
+          <li>Bat dau cau hoi bang <code>Cau N:</code>, <code>Bai N:</code> hoac <code>N.</code> di lien dau cham/ngoac roi cach ra.</li>
+          <li>Cac phuong an bat dau bang chu hoa <code>A.</code>, <code>B.</code>, <code>C.</code>, <code>D.</code> o dau dong.</li>
+          <li>Dap an dung duoc danh dau bang dau <code>*</code> truoc chu cai (vi du <code>*A.</code>), chu khoanh tron <code>&#9402;</code>-<code>&#9405;</code>, hoac dong <code>Dap an: X</code> o cuoi cau.</li>
+          <li>Noi dung cau hoi hoac phuong an dai co the xuong dong, he thong se tu dong ghep noi.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Nhap JSON truc tiep -->
+  <div id="jsonModal" class="overlay" style="display: none; z-index: 120;">
+    <div class="lock-screen" style="max-width: 620px; text-align: left;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <h3>Nhap cau hoi tu JSON</h3>
+        <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeJsonModal()">Dong</button>
+      </div>
+
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+        Dan mang JSON cau hoi vao o ben duoi. (<a href="#" onclick="openRulesModal(); return false;">Xem mau dinh dang</a>)
+      </p>
+
+      <textarea id="jsonInputArea" class="form-control" rows="10" placeholder='[&#10;  {&#10;    "question": "Cau hoi...",&#10;    "options": [&#10;      { "text": "Phuong an A", "is_correct": true },&#10;      { "text": "Phuong an B", "is_correct": false }&#10;    ]&#10;  }&#10;]'></textarea>
+
+      <div id="jsonModalError" class="alert-box alert-danger" style="display: none; margin-top: 10px; padding: 8px; font-size: 0.85rem;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+        <button class="btn btn-outline" onclick="closeJsonModal()">Huy</button>
+        <button class="btn btn-primary" onclick="submitJsonModal()">Nhap cau hoi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Xem chi tiet bai lam va Nhat ky thao tac -->
   <div id="detailModal" class="overlay" style="display: none;">
     <div class="lock-screen" style="max-width: 680px; text-align: left; max-height: 85vh; overflow-y: auto;">
-      <div
-        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
         <h3 id="modalTitle">Chi tiet bai lam</h3>
         <button class="btn btn-outline" style="padding: 4px 10px;" onclick="closeDetailModal()">Dong</button>
       </div>
 
       <div style="margin-bottom: 16px;">
         <h4 style="margin-bottom: 8px;">1. Ket qua cau hoi</h4>
-        <div id="modalAnswersList"
-          style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem;">
-        </div>
+        <div id="modalAnswersList" style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem;"></div>
       </div>
 
       <div>
         <h4 style="margin-bottom: 8px;">2. Nhat ky thao tac trong luc lam bai (Action Logs)</h4>
-        <div id="modalLogsList"
-          style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem; background: #f8fafc;">
-        </div>
+        <div id="modalLogsList" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; font-size: 0.85rem; background: #f8fafc;"></div>
       </div>
     </div>
   </div>
@@ -166,5 +233,4 @@
   <script src="js/app.js"></script>
   <script src="js/admin.js"></script>
 </body>
-
 </html>

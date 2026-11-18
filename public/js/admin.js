@@ -9,6 +9,7 @@ window.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  setupDropzone();
   loadExistingExams();
   loadResults();
 });
@@ -35,94 +36,225 @@ function switchTab(tabId) {
   }
 }
 
-// 1. Xu ly Upload file JSON
-function handleJsonUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+// 1. Thiet lap Dropzone keo tha PDF
+function setupDropzone() {
+  const dropzone = document.getElementById("pdfDropzone");
+  const fileInput = document.getElementById("pdfFileInput");
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error("File JSON phai la mot mang danh sach cac cau hoi!");
-      }
-      parsedQuestions = data;
-      showUploadStatus(`Da nap thanh cong ${parsedQuestions.length} cau hoi tu file JSON.`, false);
-      renderPreview();
-    } catch (err) {
-      showUploadStatus("Loi dinh dang file JSON: " + err.message, true);
+  if (!dropzone || !fileInput) return;
+
+  dropzone.addEventListener("click", () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handlePdfFile(file);
     }
-  };
-  reader.readAsText(file);
+    fileInput.value = "";
+  });
+
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+
+  dropzone.addEventListener("dragleave", () => {
+    dropzone.classList.remove("dragover");
+  });
+
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handlePdfFile(file);
+    }
+  });
 }
 
-// 2. Xu ly Upload file PDF chuan qua API backend
-async function handlePdfUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+// 2. Xu ly goi API doc file PDF (gui raw body application/pdf)
+async function handlePdfFile(file) {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    showUploadStatus("Chi chap nhan file dinh dang .pdf!", true);
+    return;
+  }
 
-  showUploadStatus("Dang xu ly doc van ban tu file PDF...", false);
+  if (file.size > 10 * 1024 * 1024) {
+    showUploadStatus("Dung luong file PDF vuot qua gioi han 10MB!", true);
+    return;
+  }
 
-  const formData = new FormData();
-  formData.append("pdf", file);
+  showUploadStatus("Dang doc van ban va phan tich de thi tu file PDF...", false);
 
   try {
     const res = await fetch("/api/parse-pdf", {
       method: "POST",
-      body: formData
+      headers: {
+        "Content-Type": "application/pdf"
+      },
+      body: file
     });
 
+    const data = await res.json();
     if (!res.ok) {
-      const err = await res.text();
-      throw new Error(err);
+      throw new Error(data.error || "Loi khong xac dinh khi doc PDF");
     }
 
-    const result = await res.json();
-    if (!result.questions || result.questions.length === 0) {
+    if (!data.questions || data.questions.length === 0) {
       throw new Error("Khong tim thay cau hoi nao trong file PDF!");
     }
 
-    parsedQuestions = result.questions;
-    showUploadStatus(`Da boc tach thanh cong ${parsedQuestions.length} cau hoi tu PDF!`, false);
+    // Chuan hoa bang normalizeQuestions (strict = false de cho phep sua tay cau thieu dap an)
+    const normalized = normalizeQuestions(data.questions, false);
+    parsedQuestions = normalized.questions;
+
+    // Hien thi canh bao neu co cau thieu dap an
+    const warningsEl = document.getElementById("previewWarnings");
+    const allWarnings = [...(data.warnings || []), ...(normalized.errors || [])];
+
+    if (allWarnings.length > 0) {
+      warningsEl.innerHTML = "<strong>Luu y can kiem tra:</strong><br>" + allWarnings.map(w => `- ${escapeHtml(w)}`).join("<br>");
+      warningsEl.style.display = "block";
+    } else {
+      warningsEl.style.display = "none";
+    }
+
+    showUploadStatus(`Da trich xuat ${parsedQuestions.length} cau hoi tu PDF thanh cong. Vui long kiem tra dap an truoc khi xuat ban!`, false);
     renderPreview();
   } catch (err) {
-    showUploadStatus("Loi khi doc file PDF: " + err.message + " (Goi y: Ban co the dung che do nap file JSON de chuan xac nhat).", true);
+    showUploadStatus("Loi khi doc file PDF: " + err.message, true);
   }
 }
 
-function showUploadStatus(msg, isError) {
-  const el = document.getElementById("uploadStatus");
-  el.textContent = msg;
-  el.style.display = "block";
-  el.className = isError ? "alert-box alert-danger" : "alert-box alert-info";
+// 3. Modal Quy tac dinh dang
+function openRulesModal() {
+  document.getElementById("rulesModal").style.display = "flex";
 }
 
-// 3. Hien thi ban xem truoc (Preview)
+function closeRulesModal() {
+  document.getElementById("rulesModal").style.display = "none";
+}
+
+function copySampleText(elementId, btnId) {
+  const el = document.getElementById(elementId);
+  const btn = document.getElementById(btnId);
+  if (!el || !btn) return;
+
+  const text = el.innerText || el.textContent;
+
+  const onSuccess = () => {
+    const originalText = btn.textContent;
+    btn.textContent = "Da chep";
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 1500);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopy(text, onSuccess));
+  } else {
+    fallbackCopy(text, onSuccess);
+  }
+}
+
+function fallbackCopy(text, callback) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+    if (callback) callback();
+  } catch (e) {
+    alert("Khong the sao chep tu dong. Vui long sao chep thu cong.");
+  }
+  document.body.removeChild(ta);
+}
+
+// 4. Modal Nhap JSON
+function openJsonModal() {
+  document.getElementById("jsonInputArea").value = "";
+  document.getElementById("jsonModalError").style.display = "none";
+  document.getElementById("jsonModal").style.display = "flex";
+  document.getElementById("jsonInputArea").focus();
+}
+
+function closeJsonModal() {
+  document.getElementById("jsonModal").style.display = "none";
+}
+
+function submitJsonModal() {
+  const raw = document.getElementById("jsonInputArea").value.trim();
+  const errorBox = document.getElementById("jsonModalError");
+  errorBox.style.display = "none";
+
+  if (!raw) {
+    errorBox.textContent = "Vui long dan noi dung JSON!";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    errorBox.textContent = "Dinh dang JSON khong hop le: " + e.message;
+    errorBox.style.display = "block";
+    return;
+  }
+
+  // Chuan hoa voi strict = true (bat buoc moi cau dung 1 dap an)
+  const normalized = normalizeQuestions(data, true);
+  if (normalized.errors.length > 0) {
+    errorBox.innerHTML = "<strong>Loi dinh dang cau hoi:</strong><br>" + normalized.errors.map(err => `- ${escapeHtml(err)}`).join("<br>");
+    errorBox.style.display = "block";
+    return;
+  }
+
+  parsedQuestions = normalized.questions;
+  document.getElementById("previewWarnings").style.display = "none";
+  showUploadStatus(`Da nap thanh cong ${parsedQuestions.length} cau hoi tu JSON!`, false);
+  closeJsonModal();
+  renderPreview();
+}
+
+// 5. Hien thi ban xem truoc (Preview)
 function renderPreview() {
   const container = document.getElementById("previewList");
   const countEl = document.getElementById("previewCount");
+  const saveBtn = document.getElementById("btnSaveExam");
   document.getElementById("previewSection").style.display = "block";
 
   countEl.textContent = parsedQuestions.length;
   let html = "";
-  const prefixes = ["A", "B", "C", "D", "E"];
+  let hasInvalidQuestion = false;
 
   parsedQuestions.forEach((q, qIdx) => {
+    const isOk = hasCorrectAnswer(q);
+    if (!isOk) hasInvalidQuestion = true;
+    const borderStyle = isOk ? "var(--border)" : "#ef4444";
+
     html += `
-      <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 10px;">
-        <div style="font-weight: 600; margin-bottom: 6px;">Cau ${qIdx + 1}: ${escapeHtml(q.question)}</div>
-        <div style="display: flex; flex-direction: column; gap: 4px;">
+      <div style="background: #ffffff; border: 2px solid ${borderStyle}; border-radius: var(--radius); padding: 12px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-weight: 600;">Cau ${qIdx + 1}: ${escapeHtml(q.question)}</div>
+          ${!isOk ? '<span class="badge" style="background: #fee2e2; color: #dc2626;">Chua co dap an dung</span>' : ''}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
     `;
 
     q.options.forEach((opt, optIdx) => {
-      const isCorrect = opt.is_correct === true || opt.correct === true;
+      const isCorrect = opt.is_correct === true;
       const badge = isCorrect ? '<span class="badge badge-green" style="margin-left: 6px;">Dap an dung</span>' : '';
       html += `
-        <div style="display: flex; align-items: center; font-size: 0.85rem;">
+        <label style="display: flex; align-items: center; font-size: 0.9rem; cursor: pointer; padding: 4px; border-radius: 4px;">
           <input type="radio" name="correct_${qIdx}" ${isCorrect ? "checked" : ""} onchange="setCorrectOption(${qIdx}, ${optIdx})" style="margin-right: 8px;">
-          <span><strong>${prefixes[optIdx] || optIdx}.</strong> ${escapeHtml(opt.text || opt)} ${badge}</span>
-        </div>
+          <span><strong>${PREFIXES[optIdx] || optIdx}.</strong> ${escapeHtml(opt.text)} ${badge}</span>
+        </label>
       `;
     });
 
@@ -133,6 +265,15 @@ function renderPreview() {
   });
 
   container.innerHTML = html;
+
+  // Neu con cau chua co dap an dung thi disable nut luu
+  if (hasInvalidQuestion) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Con cau hoi chua co dap an dung (khong the xuat ban)";
+  } else {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Xuat ban de thi len he thong";
+  }
 }
 
 function setCorrectOption(qIdx, optIdx) {
@@ -155,17 +296,33 @@ function addSampleQuestion() {
   renderPreview();
 }
 
-// 4. Luu de thi len Supabase (Tu dong phat cho tat ca thi sinh)
+// 6. Luu de thi len Supabase
 async function saveExam() {
   const title = document.getElementById("examTitle").value.trim();
-  const duration = document.getElementById("examDuration").value.trim();
+  const durationInput = document.getElementById("examDuration").value.trim();
+  const duration = parseInt(durationInput, 10);
 
   if (!title) {
     alert("Vui long nhap tieu de de thi!");
+    document.getElementById("examTitle").focus();
     return;
   }
+
+  if (isNaN(duration) || duration < 1) {
+    alert("Thoi gian lam bai phai la so nguyen tu 1 phut tro len!");
+    document.getElementById("examDuration").focus();
+    return;
+  }
+
   if (!parsedQuestions || parsedQuestions.length === 0) {
-    alert("Vui long tai len de thi co it nhat 1 cau hoi!");
+    alert("Vui long nhap de thi co it nhat 1 cau hoi!");
+    return;
+  }
+
+  // Kiem tra lan cuoi xem con cau nao thieu dap an khong
+  const invalid = parsedQuestions.find(q => !hasCorrectAnswer(q));
+  if (invalid) {
+    alert("Con cau hoi chua duoc chon dap an dung. Vui long chon dap an dung cho tat ca cac cau truoc khi xuat ban!");
     return;
   }
 
@@ -189,7 +346,7 @@ async function saveExam() {
   }
 }
 
-// 5. Lay danh sach de thi da tao
+// 7. Lay danh sach de thi da tao
 async function loadExistingExams() {
   const tbody = document.getElementById("examTableBody");
   try {
@@ -218,7 +375,7 @@ async function loadExistingExams() {
   }
 }
 
-// 6. Lay danh sach ket qua & Nhat ky thao tac (Audit Logs)
+// 8. Lay danh sach ket qua & Nhat ky thao tac (Audit Logs)
 async function loadResults() {
   const tbody = document.getElementById("resultsTableBody");
   try {
@@ -251,7 +408,7 @@ async function loadResults() {
   }
 }
 
-// 7. Xem chi tiet nhat ky thao tac va bai lam
+// 9. Xem chi tiet nhat ky thao tac va bai lam
 function viewResultDetail(index) {
   const item = allResultsData[index];
   if (!item) return;
@@ -264,8 +421,7 @@ function viewResultDetail(index) {
   if (Array.isArray(item.answers) && item.answers.length > 0) {
     item.answers.forEach(a => {
       const statusText = a.is_correct ? '<span style="color: var(--success); font-weight: 600;">Dung</span>' : '<span style="color: var(--danger); font-weight: 600;">Sai</span>';
-      const prefixes = ["A", "B", "C", "D"];
-      const chosen = a.selected_index !== null ? (prefixes[a.selected_index] || a.selected_index) : "Chua chon";
+      const chosen = a.selected_index !== null ? (PREFIXES[a.selected_index] || a.selected_index) : "Chua chon";
       ansHtml += `<div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9;">Cau ${a.question_index}: Chon [${chosen}] - ${statusText}</div>`;
     });
   } else {
@@ -281,7 +437,7 @@ function viewResultDetail(index) {
       logsHtml += `
         <div style="padding: 5px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace;">
           <span style="color: var(--text-muted); font-size: 0.8rem;">[${log.time || "--"}]</span>
-          <strong style="color: var(--primary); font-size: 0.85rem;">${log.type}:</strong>
+          <strong style="color: var(--primary); font-size: 0.85rem;">${escapeHtml(log.type)}:</strong>
           <span>${escapeHtml(log.detail)}</span>
         </div>
       `;
@@ -298,7 +454,9 @@ function closeDetailModal() {
   document.getElementById("detailModal").style.display = "none";
 }
 
-function escapeHtml(str) {
-  if (typeof str !== "string") return str;
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function showUploadStatus(msg, isError) {
+  const el = document.getElementById("uploadStatus");
+  el.textContent = msg;
+  el.style.display = "block";
+  el.className = isError ? "alert-box alert-danger" : "alert-box alert-info";
 }

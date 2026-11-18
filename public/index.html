@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Đăng nhập - Safe Exam</title>
+  <title>Dang nhap - Safe Exam</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,44 +13,44 @@
 
   <main class="container container-narrow" style="padding-top: 40px;">
     <div class="card" style="padding: 28px;">
-      <h2 style="margin-bottom: 6px; text-align: center;">Hệ thống Kiểm tra Trực tuyến</h2>
+      <h2 style="margin-bottom: 6px; text-align: center;">He thong Kiem tra Truc tuyen</h2>
       <p style="margin-bottom: 24px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
-        Nhập tên tài khoản để tiếp tục. Tài khoản thí sinh vào thẳng, tài khoản quản trị yêu cầu mật khẩu.
+        Nhap ten tai khoan de tiep tuc dang nhap vao he thong.
       </p>
 
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label class="form-label" for="username">Tên tài khoản</label>
+          <label class="form-label" for="username">Ten tai khoan</label>
           <input 
             type="text" 
             id="username" 
             class="form-control" 
-            placeholder="Ví dụ: nguyenvana, emtrai, admin..." 
+            placeholder="Vi du: nguyenvana, emtrai, admin..." 
             autocomplete="username" 
             required 
             autofocus
           >
         </div>
 
-        <!-- Ô nhập mật khẩu: Chỉ tự động hiển thị nếu là tài khoản admin -->
+        <!-- O nhap mat khau: Chi hien thi khi la admin o buoc 2 -->
         <div id="passwordGroup" class="form-group" style="display: none; margin-top: 16px;">
-          <label class="form-label" for="password">Mật khẩu quản trị</label>
+          <label class="form-label" for="password">Mat khau quan tri</label>
           <input 
             type="password" 
             id="password" 
             class="form-control" 
-            placeholder="Nhập mật khẩu quản trị viên..." 
+            placeholder="Nhap mat khau quan tri vien..." 
             autocomplete="current-password"
           >
           <small style="color: var(--text-muted); font-size: 0.8rem; display: block; margin-top: 4px;">
-            Nhận diện vai trò Quản trị viên (Admin). Vui lòng nhập mật khẩu để xác thực.
+            Nhan dien tai khoan Quan tri vien (Admin). Vui long nhap mat khau de xac thuc.
           </small>
         </div>
 
         <div id="loginErrorBox" class="alert-box alert-danger" style="display: none; padding: 10px; font-size: 0.85rem; margin-top: 14px; margin-bottom: 6px;"></div>
 
         <button type="submit" id="submitBtn" class="btn btn-primary btn-block" style="padding: 13px; margin-top: 16px; font-size: 1rem;">
-          Vào phòng thi
+          Dang nhap
         </button>
       </form>
     </div>
@@ -63,6 +63,8 @@
     const submitBtn = document.getElementById('submitBtn');
     const errorBox = document.getElementById('loginErrorBox');
 
+    let currentStep = 'user'; // 'user' | 'admin'
+
     function showError(msg) {
       errorBox.textContent = msg;
       errorBox.style.display = 'block';
@@ -73,48 +75,47 @@
       errorBox.style.display = 'none';
     }
 
-    // Tự động kiểm tra vai trò khi nhập tên tài khoản
-    function checkRole() {
+    // Neu sua o tai khoan khi dang o step admin -> reset ve step user
+    usernameInput.addEventListener('input', () => {
       hideError();
-      const user = usernameInput.value.trim().toLowerCase();
-
-      if (user === 'admin') {
-        // Nếu là admin: hiển thị ô nhập mật khẩu và yêu cầu mật khẩu
-        passwordGroup.style.display = 'block';
-        passwordInput.required = true;
-        submitBtn.textContent = 'Đăng nhập Quản trị';
-      } else {
-        // Nếu là role user: ẩn ô mật khẩu, vào thẳng
+      if (currentStep === 'admin') {
+        currentStep = 'user';
         passwordGroup.style.display = 'none';
-        passwordInput.required = false;
         passwordInput.value = '';
-        submitBtn.textContent = 'Vào phòng thi';
       }
-    }
+    });
 
-    usernameInput.addEventListener('input', checkRole);
-
-    // Xử lý đăng nhập
     function handleLogin(e) {
       e.preventDefault();
       hideError();
 
       const user = usernameInput.value.trim();
       if (!user) {
-        showError('Vui lòng nhập tên tài khoản!');
+        showError('Vui long nhap ten tai khoan!');
         usernameInput.focus();
         return;
       }
 
-      // 1. Nếu là Admin: Bắt buộc nhập mật khẩu và kiểm tra
-      if (user.toLowerCase() === 'admin') {
-        passwordGroup.style.display = 'block';
-        passwordInput.required = true;
-        submitBtn.textContent = 'Đăng nhập Quản trị';
+      // Buoc 1: Kiem tra ten tai khoan
+      if (currentStep === 'user') {
+        if (user.toLowerCase() === 'admin') {
+          currentStep = 'admin';
+          passwordGroup.style.display = 'block';
+          passwordInput.value = '';
+          passwordInput.focus();
+          return;
+        }
 
+        // Thi sinh vao thang phong thi
+        window.location.href = `exam.html?user=${encodeURIComponent(user)}`;
+        return;
+      }
+
+      // Buoc 2: Xac thuc mat khau admin
+      if (currentStep === 'admin') {
         const pass = passwordInput.value.trim();
         if (!pass) {
-          showError('Vui lòng nhập mật khẩu quản trị viên!');
+          showError('Vui long nhap mat khau quan tri vien!');
           passwordInput.focus();
           return;
         }
@@ -123,14 +124,10 @@
           sessionStorage.setItem('safe_exam_admin_auth', 'true');
           window.location.href = 'admin.html';
         } else {
-          showError('Mật khẩu quản trị viên không chính xác!');
+          showError('Mat khau quan tri vien khong chinh xac!');
           passwordInput.focus();
         }
-        return;
       }
-
-      // 2. Nếu là Role User: Vào thẳng phòng thi ngay lập tức
-      window.location.href = `exam.html?user=${encodeURIComponent(user)}`;
     }
   </script>
 </body>

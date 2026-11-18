@@ -1,19 +1,22 @@
 // Trang thai phien thi hien tai
-let currentStudent = "emtrai";
+let currentStudent = "";
 let currentExam = null;
 let currentQuestions = [];
 let userAnswers = {}; // { questionIndex: optionIndex }
 let currentQuestionIndex = 0;
 let remainingSeconds = 0;
+let deadline = 0;
 let timerInterval = null;
 let tracker = null;
+let isSubmitting = false;
 
 // Khoi tao khi tai trang
 window.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);
-  const user = urlParams.get("user");
-  if (user) {
-    currentStudent = user.trim();
+  currentStudent = (urlParams.get("user") || "").trim();
+  if (!currentStudent) {
+    window.location.href = "index.html";
+    return;
   }
   document.getElementById("studentBadge").textContent = currentStudent;
 
@@ -69,10 +72,22 @@ async function startExam(examId) {
     currentQuestions = examDetail.questions;
     currentQuestionIndex = 0;
     userAnswers = {};
+    isSubmitting = false;
 
     // Khoi tao bo theo doi thao tac
     tracker = new ActionTracker();
     tracker.addLog("CHON_DE", `Bat dau lam de: ${currentExam.title}`, null, null);
+
+    // Khoi phuc ban nhap neu co (mat mang / tat nguon / tai lai trang)
+    const draft = StorageHelper.getDraft(examId);
+    if (draft && draft.deadline) {
+      userAnswers = draft.answers || {};
+      deadline = draft.deadline;
+      tracker.addLog("KHOI_PHUC", `Khoi phuc ban nhap: ${Object.keys(userAnswers).length} cau da chon`);
+    } else {
+      deadline = Date.now() + (currentExam.duration_minutes || 45) * 60000;
+      StorageHelper.saveDraft(examId, userAnswers, deadline);
+    }
 
     // Kich hoat Kiosk Mode tren Android neu co
     if (window.KioskBridge && typeof window.KioskBridge.startLock === "function") {
@@ -87,25 +102,23 @@ async function startExam(examId) {
     document.getElementById("viewExamPlay").style.display = "block";
     document.getElementById("headerTitle").textContent = currentExam.title;
 
-    // Khoi dong dong ho dem nguoc
-    remainingSeconds = (currentExam.duration_minutes || 45) * 60;
-    const timerElem = document.getElementById("timerDisplay");
-    timerElem.style.display = "block";
-    updateTimerText();
-
-    timerInterval = setInterval(() => {
-      remainingSeconds--;
-      updateTimerText();
-      if (remainingSeconds <= 0) {
-        clearInterval(timerInterval);
-        tracker.addLog("HET_GIO", "Dong ho ve 00:00, tu dong nop bai");
-        autoSubmitOnTimeout();
-      }
-    }, 1000);
-
+    // Khoi dong dong ho dem nguoc theo moc deadline (khong lech khi tab bi throttle)
+    document.getElementById("timerDisplay").style.display = "block";
     renderQuestion();
+    tick();
+    timerInterval = setInterval(tick, 1000);
   } catch (err) {
     alert("Loi khi tai de thi: " + err.message);
+  }
+}
+
+function tick() {
+  remainingSeconds = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+  updateTimerText();
+  if (remainingSeconds <= 0) {
+    clearInterval(timerInterval);
+    tracker.addLog("HET_GIO", "Dong ho ve 00:00, tu dong nop bai");
+    doSubmitExam();
   }
 }
 
@@ -118,15 +131,13 @@ function renderQuestion() {
 
   const container = document.getElementById("optionsContainer");
   let html = "";
-  const prefixes = ["A", "B", "C", "D", "E", "F"];
-
   q.options.forEach((opt, idx) => {
     const isSelected = userAnswers[currentQuestionIndex] === idx;
     const selectedClass = isSelected ? "selected" : "";
     html += `
       <div class="option-item ${selectedClass}" onclick="selectOption(${idx})">
-        <span class="option-prefix">${prefixes[idx] || (idx + 1)}</span>
-        <span>${escapeHtml(opt.text || opt)}</span>
+        <span class="option-prefix">${PREFIXES[idx] || (idx + 1)}</span>
+        <span>${escapeHtml(opt.text)}</span>
       </div>
     `;
   });
@@ -140,12 +151,12 @@ function renderQuestion() {
 
 // Chon dap an
 function selectOption(optionIndex) {
+  if (isSubmitting) return;
   const prevSelection = userAnswers[currentQuestionIndex];
   userAnswers[currentQuestionIndex] = optionIndex;
 
   // Ghi log thao tac
-  const prefixes = ["A", "B", "C", "D"];
-  const chosenPrefix = prefixes[optionIndex] || optionIndex;
+  const chosenPrefix = PREFIXES[optionIndex] || optionIndex;
   if (prevSelection !== undefined && prevSelection !== optionIndex) {
     tracker.addLog("DOI_DAP_AN", `Doi dap an cau ${currentQuestionIndex + 1} sang ${chosenPrefix}`, currentQuestionIndex + 1, chosenPrefix);
   } else {
@@ -153,7 +164,7 @@ function selectOption(optionIndex) {
   }
 
   // Luu nhap local
-  StorageHelper.saveDraft(currentExam.id, userAnswers, remainingSeconds);
+  StorageHelper.saveDraft(currentExam.id, userAnswers, deadline);
 
   renderQuestion();
 }
@@ -183,6 +194,7 @@ function updateTimerText() {
 
 // Xac nhan nop bai
 function confirmSubmit() {
+  if (isSubmitting) return;
   const answeredCount = Object.keys(userAnswers).length;
   const totalCount = currentQuestions.length;
   let msg = `Ban da lam ${answeredCount} / ${totalCount} cau. Ban co chac chan muon nop bai khong?`;
@@ -195,13 +207,10 @@ function confirmSubmit() {
   }
 }
 
-function autoSubmitOnTimeout() {
-  alert("Da het gio lam bai! He thong dang tu dong nop bai...");
-  doSubmitExam();
-}
-
 // Thuc hien nop bai ("Luu truoc - Khoa sau")
 async function doSubmitExam() {
+  if (isSubmitting) return;
+  isSubmitting = true;
   if (timerInterval) clearInterval(timerInterval);
 
   const btnSubmit = document.getElementById("btnSubmit");
@@ -235,7 +244,7 @@ async function doSubmitExam() {
 
   const total = currentQuestions.length;
   const score = total > 0 ? ((correctCount / total) * 10).toFixed(1) : 0;
-  const durationSpent = Math.max(1, Math.round(((currentExam.duration_minutes * 60) - remainingSeconds) / 60));
+  const durationSpent = Math.max(1, Math.round(((currentExam.duration_minutes || 45) * 60 - remainingSeconds) / 60));
 
   tracker.addLog("NOP_BAI", `Nop bai thanh cong voi so diem ${score}/10`, null, null);
 
@@ -259,6 +268,7 @@ async function doSubmitExam() {
     document.getElementById("viewExamPlay").style.display = "none";
     document.getElementById("viewLockScreen").style.display = "flex";
   } catch (err) {
+    isSubmitting = false;
     btnSubmit.disabled = false;
     btnSubmit.textContent = "Thu nop lai";
     alert("Khong the nop bai vi loi ket noi mang. Vui long kiem tra Wifi/4G va bam Thu nop lai. Bai lam cua ban van duoc giu nguyen!");
@@ -298,9 +308,4 @@ function requestWebFullscreen() {
   } else if (el.webkitRequestFullscreen) {
     el.webkitRequestFullscreen().catch(() => { });
   }
-}
-
-function escapeHtml(str) {
-  if (typeof str !== "string") return str;
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
