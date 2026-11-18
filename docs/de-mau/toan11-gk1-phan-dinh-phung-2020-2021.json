@@ -1,0 +1,244 @@
+{
+  "title": "Kiểm tra giữa kì I - Toán 11 - THPT Phan Đình Phùng (2020-2021) - Mã đề 123",
+  "duration_minutes": 60,
+  "parts": [
+    {
+      "type": "single",
+      "questions": [
+        {
+          "question": "Trong các phương trình sau, phương trình nào vô nghiệm?",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\cos 5x = -1$", "is_correct": false },
+            { "text": "$\\cos 2x = 0,3$", "is_correct": false },
+            { "text": "$4\\cos x = 1$", "is_correct": false },
+            { "text": "$\\cos 2x = \\sqrt{2}$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Trong mặt phẳng tọa độ $Oxy$, phép quay tâm $O$ góc $90^\\circ$ biến điểm $M(2;3)$ thành điểm $M'$ có tọa độ là",
+          "points": 0.25,
+          "options": [
+            { "text": "$M'(-3;2)$", "is_correct": true },
+            { "text": "$M'(2;-3)$", "is_correct": false },
+            { "text": "$M'(-2;-3)$", "is_correct": false },
+            { "text": "$M'(3;-2)$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Phép vị tự $V_{(O,k)}$ biến đoạn thẳng $AB$ thành đoạn thẳng $A'B'$. Khẳng định nào sau đây đúng?",
+          "points": 0.25,
+          "options": [
+            { "text": "$AB = \\frac{1}{k}A'B'$", "is_correct": false },
+            { "text": "$A'B' = |k|AB$", "is_correct": true },
+            { "text": "$AB = A'B'$", "is_correct": false },
+            { "text": "$AB = kA'B'$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Tính chất nào sau đây không phải là tính chất của phép dời hình?",
+          "points": 0.25,
+          "options": [
+            { "text": "Biến đoạn thẳng thành đoạn thẳng có độ dài gấp $k$ lần độ dài đoạn thẳng ban đầu.", "is_correct": true },
+            { "text": "Biến tam giác thành tam giác bằng nó, biến tia thành tia.", "is_correct": false },
+            { "text": "Biến ba điểm thẳng hàng thành ba điểm thẳng hàng và bảo toàn thứ tự của ba điểm đó.", "is_correct": false },
+            { "text": "Biến đường tròn thành đường tròn có cùng bán kính.", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Phương trình $2\\cos x + 1 = 0$ có các họ nghiệm là",
+          "points": 0.25,
+          "options": [
+            { "text": "$x = \\pm\\frac{\\pi}{3} + k2\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": false },
+            { "text": "$x = \\pm\\frac{2\\pi}{3} + k2\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": true },
+            { "text": "$x = \\pm\\frac{\\pi}{6} + k2\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": false },
+            { "text": "$x = \\pm\\frac{\\pi}{6} + k\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Cho ba hàm số $y = \\sin x$, $y = \\cos x$, $y = \\cot x$. Có bao nhiêu hàm số đồng biến trên $\\left(0; \\frac{3\\pi}{2}\\right)$?",
+          "points": 0.25,
+          "options": [
+            { "text": "$3$", "is_correct": false },
+            { "text": "$1$", "is_correct": false },
+            { "text": "$2$", "is_correct": false },
+            { "text": "$0$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Tổng tất cả các nghiệm trên đoạn $\\left[-\\frac{\\pi}{2}; \\frac{\\pi}{2}\\right]$ của phương trình $\\sin x = \\frac{1}{2}$ bằng",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\frac{\\pi}{6}$", "is_correct": true },
+            { "text": "$\\frac{\\pi}{3}$", "is_correct": false },
+            { "text": "$\\frac{5\\pi}{6}$", "is_correct": false },
+            { "text": "$\\frac{\\pi}{2}$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Cho hình chữ nhật $ABCD$, $AC$ và $BD$ cắt nhau tại $I$. Gọi $H$, $K$, $L$ và $J$ lần lượt là trung điểm $AD$, $BC$, $KC$ và $IC$.\nẢnh của hình thang $JLKI$ qua phép đồng dạng bằng cách thực hiện liên tiếp phép vị tự tâm $C$ tỉ số $2$ và phép quay tâm $I$ góc $180^\\circ$ là",
+          "points": 0.25,
+          "image": "",
+          "options": [
+            { "text": "hình thang $IHDC$", "is_correct": true },
+            { "text": "hình thang $HIAB$", "is_correct": false },
+            { "text": "hình thang $IKBA$", "is_correct": false },
+            { "text": "hình thang $IDCK$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Trong mặt phẳng tọa độ $Oxy$ cho điểm $A(-2;5)$ và vectơ $\\vec{u} = (6;-3)$. Biết điểm $A'$ là ảnh của điểm $A$ qua phép tịnh tiến theo vectơ $\\vec{u}$. Tọa độ của điểm $A'$ là",
+          "points": 0.25,
+          "options": [
+            { "text": "$A'(2;4)$", "is_correct": false },
+            { "text": "$A'(-4;2)$", "is_correct": false },
+            { "text": "$A'(4;-2)$", "is_correct": false },
+            { "text": "$A'(4;2)$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Mệnh đề nào sau đây là mệnh đề sai?",
+          "points": 0.25,
+          "options": [
+            { "text": "Phép tịnh tiến biến đường tròn thành đường tròn có cùng bán kính.", "is_correct": false },
+            { "text": "Phép tịnh tiến biến tam giác thành tam giác bằng nó.", "is_correct": false },
+            { "text": "Phép tịnh tiến biến đoạn thẳng thành đoạn thẳng bằng nó.", "is_correct": false },
+            { "text": "Phép tịnh tiến biến đường thẳng thành đường thẳng song song với nó.", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Điều kiện cần và đủ để phương trình $a\\sin 2x + b\\cos 2x = c$ có nghiệm là",
+          "points": 0.25,
+          "options": [
+            { "text": "$a^{2} + b^{2} \\le c^{2}$", "is_correct": false },
+            { "text": "$a^{2} + b^{2} > c^{2}$", "is_correct": false },
+            { "text": "$a^{2} + b^{2} \\ge c^{2}$", "is_correct": true },
+            { "text": "$a^{2} + b^{2} < c^{2}$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Giá trị nhỏ nhất và giá trị lớn nhất của hàm số $y = \\sqrt{2}\\cos^{2}\\left(x + \\frac{\\pi}{4}\\right) + 1$ theo thứ tự là",
+          "points": 0.25,
+          "options": [
+            { "text": "$1$ và $1 + \\sqrt{2}$", "is_correct": true },
+            { "text": "$1$ và $\\sqrt{2}$", "is_correct": false },
+            { "text": "$1 + \\sqrt{2}$ và $1$", "is_correct": false },
+            { "text": "$1 - \\sqrt{2}$ và $1 + \\sqrt{2}$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Cho $\\Delta ABC$ đều như hình vẽ.\nBiết phép quay tâm $B$ góc $\\alpha$ biến điểm $A$ thành điểm $C$. Khẳng định nào sau đây đúng?",
+          "points": 0.25,
+          "image": "",
+          "options": [
+            { "text": "$\\alpha = 300^\\circ$", "is_correct": true },
+            { "text": "$\\alpha = -120^\\circ$", "is_correct": false },
+            { "text": "$\\alpha = 60^\\circ$", "is_correct": false },
+            { "text": "$\\alpha = 45^\\circ$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Phương trình $\\sin x - 2m + 1 = 0$ có nghiệm khi và chỉ khi",
+          "points": 0.25,
+          "options": [
+            { "text": "$m \\ge -\\frac{1}{2}$", "is_correct": false },
+            { "text": "$m > -\\frac{1}{2}$", "is_correct": false },
+            { "text": "$0 < m < 1$", "is_correct": false },
+            { "text": "$0 \\le m \\le 1$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Trong mặt phẳng tọa độ $Oxy$, phép vị tự $V_{(O,-2)}$ biến điểm $M(-2;6)$ thành điểm $M'$ có tọa độ là",
+          "points": 0.25,
+          "options": [
+            { "text": "$M'(-4;12)$", "is_correct": false },
+            { "text": "$M'(1;-3)$", "is_correct": false },
+            { "text": "$M'(4;-12)$", "is_correct": true },
+            { "text": "$M'(-1;3)$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Giải phương trình $\\sqrt{3}\\tan x + 1 = 0$ ta được",
+          "points": 0.25,
+          "options": [
+            { "text": "$x = -\\frac{\\pi}{6} + k\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": true },
+            { "text": "$x = \\frac{\\pi}{3} + k2\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": false },
+            { "text": "$x = \\frac{\\pi}{6} + k\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": false },
+            { "text": "$x = -\\frac{\\pi}{6} + k2\\pi \\ (k \\in \\mathbb{Z})$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Hàm số $y = \\tan x$ đồng biến trên khoảng nào dưới đây?",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\left(-\\frac{\\pi}{2}; \\frac{\\pi}{2}\\right)$", "is_correct": true },
+            { "text": "$(\\pi; 2\\pi)$", "is_correct": false },
+            { "text": "$\\left(\\frac{\\pi}{4}; \\frac{5\\pi}{4}\\right)$", "is_correct": false },
+            { "text": "$(0; \\pi)$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Trong các hàm số $y = \\sin x$, $y = \\cos x$, $y = \\cot x$, có mấy hàm số lẻ?",
+          "points": 0.25,
+          "options": [
+            { "text": "$0$", "is_correct": false },
+            { "text": "$3$", "is_correct": false },
+            { "text": "$1$", "is_correct": false },
+            { "text": "$2$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Có bao nhiêu giá trị nguyên của tham số $m$ để phương trình $m\\sin^{2}x + 2\\sin 2x + 3m\\cos^{2}x = 2$ có nghiệm?",
+          "points": 0.25,
+          "options": [
+            { "text": "$3$", "is_correct": true },
+            { "text": "$4$", "is_correct": false },
+            { "text": "$2$", "is_correct": false },
+            { "text": "$1$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Cho hai điểm $A, B$ thuộc đồ thị hàm số $y = \\sin x$ trên đoạn $[0; \\pi]$. Xét các điểm $C, D$ thuộc trục $Ox$ thỏa mãn $ABCD$ là hình chữ nhật và độ dài $CD = \\frac{2\\pi}{3}$ (minh họa như hình vẽ). Hỏi độ dài của cạnh $BC$ bằng bao nhiêu?",
+          "points": 0.25,
+          "image": "",
+          "options": [
+            { "text": "$\\frac{\\sqrt{2}}{2}$", "is_correct": false },
+            { "text": "$\\frac{1}{2}$", "is_correct": true },
+            { "text": "$\\frac{\\sqrt{3}}{2}$", "is_correct": false },
+            { "text": "$1$", "is_correct": false }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "essay_manual",
+      "questions": [
+        {
+          "question": "Tìm tập xác định của hàm số $y = \\frac{1}{\\cos x + 1}$.",
+          "points": 1,
+          "solution": "Điều kiện: $\\cos x \\neq -1 \\Leftrightarrow x \\neq \\pi + k2\\pi, k \\in \\mathbb{Z}$ (0,5đ).\nTập xác định: $D = \\mathbb{R} \\setminus \\{\\pi + k2\\pi, k \\in \\mathbb{Z}\\}$ (0,5đ)."
+        },
+        {
+          "question": "Trong mặt phẳng tọa độ $Oxy$, cho đường tròn $(C)$ có phương trình $(x - 2)^{2} + (y + 1)^{2} = 5$. Viết phương trình đường tròn ảnh của đường tròn $(C)$ qua phép vị tự tâm $O$, tỉ số $k = -1$.",
+          "points": 1,
+          "solution": "$(C)$ có tâm $I(2;-1)$, bán kính $R = \\sqrt{5}$ (0,5đ).\n$\\overrightarrow{OI'} = -\\overrightarrow{OI} \\Rightarrow I'(-2;1)$, $R' = |-1|\\sqrt{5} = \\sqrt{5}$.\n$(C'): (x + 2)^{2} + (y - 1)^{2} = 5$ (0,5đ)."
+        },
+        {
+          "question": "Giải phương trình: $2\\cos 2x + 9\\sin x - 7 = 0$.",
+          "points": 1,
+          "solution": "$\\Leftrightarrow 2(1 - 2\\sin^{2}x) + 9\\sin x - 7 = 0 \\Leftrightarrow -4\\sin^{2}x + 9\\sin x - 5 = 0$ (0,25đ).\n$\\Leftrightarrow \\sin x = 1$ hoặc $\\sin x = \\frac{5}{4}$ (vô nghiệm) (0,25đ).\n$\\sin x = 1 \\Leftrightarrow x = \\frac{\\pi}{2} + k2\\pi \\ (k \\in \\mathbb{Z})$ (0,5đ)."
+        },
+        {
+          "question": "Giải phương trình: $\\cos 3x + \\cos 2x - \\cos x - 1 = 0$.",
+          "points": 1,
+          "solution": "$\\Leftrightarrow -2\\sin 2x\\sin x - 2\\sin^{2}x = 0 \\Leftrightarrow -2\\sin x(\\sin 2x + \\sin x) = 0$ (0,25đ).\n$\\sin x = 0 \\Leftrightarrow x = k\\pi$; $\\sin 2x = \\sin(-x)$ (0,25đ).\n$\\Leftrightarrow x = k\\frac{2\\pi}{3}$ hoặc $x = \\pi + k2\\pi$ (0,25đ).\nVậy $x = k\\pi$; $x = k\\frac{2\\pi}{3}$; $x = \\pi + k2\\pi \\ (k \\in \\mathbb{Z})$ (0,25đ)."
+        },
+        {
+          "question": "Tìm tất cả các giá trị thực của tham số $m$ để phương trình $m\\sin^{2}x - 3\\sin x\\cos x - m - 1 = 0$ có đúng 3 nghiệm thuộc khoảng $\\left(0; \\frac{3\\pi}{2}\\right)$.",
+          "points": 1,
+          "solution": "$x = \\frac{\\pi}{2}$: phương trình thành $-1 = 0$ (vô lý), nên $x = \\frac{\\pi}{2}$ không là nghiệm (0,25đ).\n$x \\neq \\frac{\\pi}{2}$: chia hai vế cho $\\cos^{2}x$, đặt $t = \\tan x$: $t^{2} + 3t + m + 1 = 0 \\ (*)$ (0,25đ).\nYêu cầu bài toán $\\Leftrightarrow (*)$ có hai nghiệm trái dấu (0,25đ).\n$\\Leftrightarrow ac < 0 \\Leftrightarrow m + 1 < 0 \\Leftrightarrow m < -1$ (0,25đ)."
+        }
+      ]
+    }
+  ]
+}

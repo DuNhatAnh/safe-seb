@@ -30,7 +30,7 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
 ### 2.1. Đăng nhập và Xác thực
 - Cơ chế đăng nhập 2 bước bảo mật:
   - Nhập tên tài khoản: Nếu nhập `admin`, hệ thống mới hiển thị ô nhập mật khẩu quản trị.
-  - Mật khẩu mặc định: `admin@123`. Xác thực thành công lưu session bảo vệ trang quản trị.
+  - Mật khẩu kiểm tra trên server (`ADMIN_PASSWORD`). Đúng thì server trả token ký HMAC hạn 12 giờ, lưu ở `sessionStorage`; mọi thao tác admin gửi kèm token qua proxy `/api/admin/rest` (chỉ các bảng `exams`, `exam_results`, `exam_events`, `app_settings`). Sai 5 lần tạm khoá 5 phút.
 
 ### 2.2. Bố cục Sidebar
 - Trang quản trị dùng sidebar trái gồm 3 mục: **Tạo đề thi**, **Định dạng cấu trúc đề**, **Kết quả & nhật ký**. Dưới 768px sidebar chuyển thành thanh ngang ở đầu trang.
@@ -58,7 +58,7 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
 - Điểm bài = tổng điểm đạt / tổng điểm tối đa × 10. Câu giáo viên chấm được đánh dấu `pending` cho tới khi có điểm.
 
 ### 2.4. Nhập đề thi bằng JSON
-- Chọn mẫu cấu trúc, rồi dán JSON vào modal (không cần file): `{ "title", "duration_minutes", "parts": [{ "type", "questions": [...] }] }`. Vẫn nhận mảng câu hỏi phẳng (mỗi câu tự xếp vào phần cùng dạng). Tiêu đề và thời gian được tự điền.
+- Dán JSON vào modal (không cần file); cấu trúc đề được **tự nhận diện** theo thứ tự dạng câu của các phần: ưu tiên mẫu đang chọn, rồi mẫu cùng thứ tự dạng và không lỗi, rồi mẫu chỉ lệch số câu. Không có mẫu nào khớp thì tự tạo và lưu mẫu mới (số câu tuỳ ý, điểm/câu lấy giá trị phổ biến trong JSON). Chế độ "Nối thêm" giữ cấu trúc đang chọn. Định dạng: `{ "title", "duration_minutes", "parts": [{ "type", "questions": [...] }] }`. Vẫn nhận mảng câu hỏi phẳng (mỗi câu tự xếp vào phần cùng dạng). Tiêu đề và thời gian được tự điền.
 - Thiếu số câu so với mẫu vẫn cho nhập (báo lỗi theo phần, khoá xuất bản) để bổ sung bằng nút **+** của phần đó.
 - Tự sửa dấu `\` thiếu trước lệnh LaTeX (`\frac`, `\{`, `\,` → `\\frac`...) trước khi parse, nhưng giữ `\n` là xuống dòng.
 - Lỗi được báo theo từng câu ngay trong modal, kể cả câu thuộc dạng chưa có trong cấu trúc đề.
@@ -81,6 +81,24 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
   - Toàn bộ nhật ký thao tác (Action Logs): Mốc thời gian chính xác, loại thao tác (`BAT_DAU`, `CHON_DAP_AN`, `DOI_DAP_AN`, `NHAP_DAP_AN`, `ROI_MAN_HINH`, `QUAY_LAI`, `MAT_TIEU_DIEM`, `HET_GIO`, `NOP_BAI`).
 
 ---
+
+## 2b. BẢO MẬT PHÍA SERVER (`lib/`: Router → controllers → services → repositories → SupabaseClient)
+
+- Trình duyệt không giữ khoá Supabase, mật khẩu admin hay mật khẩu giám thị. Server dùng khoá `service_role` từ biến môi trường; `database/schema.sql` bật RLS, bỏ mọi policy công khai và thu hồi quyền của `anon`/`authenticated`.
+- Thí sinh nhận đề đã lọc đáp án (`GradingService.sanitizeQuestion`: bỏ `is_correct`, `is_true`, `answer`, `answers`, `solution`; câu tự luận chỉ kèm cờ `numeric`).
+- Server chấm bằng chính registry `question-types.js` (`GradingService` nạp vào vm), bỏ qua mọi điểm số client gửi. Thời lượng bị giới hạn tối đa bằng thời gian đề + 1 phút.
+- Mỗi thí sinh chỉ nộp 1 lần mỗi đề: nộp lại trả 409 kèm kết quả cũ (dùng khi lần trước đã lưu nhưng mất phản hồi).
+- Mật khẩu giám thị (`PROCTOR_PASSWORD`) kiểm tra ở `/api/proctor-exit`; đúng hay sai đều ghi `exam_events`. Sai 5 lần tạm khoá 5 phút. Không có mạng thì không thoát được.
+
+| Route | Quyền | Việc |
+|---|---|---|
+| `GET /api/exams` | công khai | danh sách đề (không có câu hỏi) |
+| `GET /api/exam?id=&student=` | công khai | đề đã lọc đáp án; đã nộp → 409 |
+| `GET /api/history?student=` | công khai | lịch sử điểm của thí sinh |
+| `POST /api/submit` | công khai | server chấm và lưu bài |
+| `POST /api/proctor-exit` | mật khẩu giám thị | ghi sự cố thoát |
+| `POST /api/admin/login` | mật khẩu admin | cấp token |
+| `POST /api/admin/rest` | token admin | proxy REST các bảng hệ thống |
 
 ## 3. GIAO DIỆN THÍ SINH (EXAM CLIENT)
 
@@ -112,9 +130,27 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
 4. Kiểm tra phản hồi từ Supabase:
    - Nếu gặp lỗi kết nối hoặc mất mạng: Giữ nguyên toàn bộ bài làm, thông báo lỗi mạng và cho phép thí sinh bấm "Thử nộp lại". Tuyệt đối không khóa máy để tránh làm mất bài của thí sinh.
    - Nếu Supabase xác nhận lưu thành công (HTTP 201/200): Xóa bộ nhớ tạm và chuyển sang màn hình Khóa an toàn.
-5. Màn hình Khóa an toàn:
-   - Hiển thị điểm số và thông báo bài thi đã nộp thành công.
-   - Khóa cứng màn hình, chỉ cho phép mở khóa khi giám thị nhập đúng mật khẩu bảo vệ (`PROCTOR_UNLOCK_PASSWORD`).
+5. Màn hình kết quả:
+   - Hiển thị điểm số và thông báo bài thi đã nộp thành công. Thiết bị vẫn ở chế độ Kiosk.
+   - Nút **Xem lịch sử làm bài** (không cần mật khẩu) quay về danh sách đề.
+   - Nút **Thoát ứng dụng (Giám thị)** cần mật khẩu giám thị, ghi sự cố `THOAT_UNG_DUNG` lên `exam_events`.
+
+### 3.4. Lịch sử làm bài và điều kiện nộp
+- Màn danh sách đề có mục **Lịch sử làm bài** (đề, điểm, chờ chấm tự luận, thời lượng, thời điểm nộp) lấy từ `exam_results` theo tên thí sinh.
+- Mỗi đề chỉ nộp 1 lần: đề đã nộp hiện "Đã nộp · điểm", đề làm dở hiện "Tiếp tục làm bài", bản nháp quá hạn hiện "Nộp bài" và tự nộp khi mở.
+- Nút **Nộp bài** chỉ bật khi đã trả lời đủ mọi câu (trừ câu tự luận làm trên giấy). Hết giờ thì tự nộp bất kể.
+
+### 3.5. Thoát khẩn cấp
+- Nút **Thoát khẩn cấp (Giám thị)** trong lúc làm bài: nhập mật khẩu giám thị + lý do (tuỳ chọn).
+- Server xác thực mật khẩu rồi ghi `THOAT_KHAN_CAP` (lý do, số câu đã làm, thời gian còn lại, số lần sai mật khẩu) vào `exam_events` kèm toàn bộ nhật ký tới thời điểm đó. Bài làm giữ ở bản nháp, đồng hồ vẫn chạy theo deadline.
+- Mỗi lần nhập sai mật khẩu ghi `SAI_MAT_KHAU` vào nhật ký bài và `exam_events`.
+- Admin xem ở bảng **Sự cố phòng thi** (trang Kết quả). Bảng kết quả gắn nhãn "Vi phạm N" / "Thoát khẩn cấp N".
+
+### 3.6. Khoá trình duyệt (`public/js/lockdown.js`)
+- Web thường: bắt buộc toàn màn hình + Keyboard Lock API (Chrome/Edge: phải giữ Esc mới thoát được). Thoát toàn màn hình, chuyển tab, Alt+Tab, mất tiêu điểm -> ghi log và che kín đề cho tới khi bấm "Quay lại bài thi".
+- Chặn: chuột phải, sao chép/cắt/dán, bôi đen, kéo thả, F5/Ctrl+R, F12/Ctrl+Shift+I, Ctrl+P/S/U, Alt+←, nút Back; cảnh báo khi đóng/tải lại trang. Chuột rời cửa sổ (màn hình thứ 2) -> ghi log.
+- Log vi phạm: `ROI_MAN_HINH`, `MAT_TIEU_DIEM`, `THOAT_TOAN_MAN_HINH`, `PHIM_BI_CHAN`, `CHUOT_PHAI`, `SAO_CHEP`, `CHUOT_RA_NGOAI`, `TAI_LAI_TRANG`, `NUT_BACK`, `SAI_MAT_KHAU` (mỗi loại tối đa 1 log / 2 giây).
+- Android Kiosk và Safe Exam Browser (nhận diện qua User-Agent `SEB/`) không bắt buộc toàn màn hình vì hệ điều hành đã khoá.
 
 ---
 

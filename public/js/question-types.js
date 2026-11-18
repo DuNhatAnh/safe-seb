@@ -150,7 +150,10 @@ const QUESTION_TYPES = {
 
     readEditor: root => ({ answers: root.querySelector(".ed-answers").value.split(/\r?\n/) }),
 
-    isNumeric: q => q.answers.length > 0 && q.answers.every(a => parseNumber(a) !== null),
+    // De phia thi sinh da bo dap an, server gui kem co "numeric"
+    isNumeric: q => Array.isArray(q.answers)
+      ? q.answers.length > 0 && q.answers.every(a => parseNumber(a) !== null)
+      : !!q.numeric,
 
     renderExam(q, answer, raw) {
       const numeric = QUESTION_TYPES.essay.isNumeric(q);
@@ -425,6 +428,30 @@ function templateTotal(t) {
   return { fixed, total: t.parts.reduce((s, p) => s + p.count * p.points, 0) };
 }
 
+// Hinh ve cua cau: link http(s), data URL, hoac ma base64 tran (tu nhan dang PNG/JPEG/GIF/WEBP/SVG).
+// Tra ve { src } (src rong = khong co hinh) hoac { error }.
+const IMAGE_MAX_CHARS = 3 * 1024 * 1024; // ~2,2 MB anh goc
+const BASE64_MIME = [["iVBORw0KGgo", "png"], ["/9j/", "jpeg"], ["R0lGOD", "gif"], ["UklGR", "webp"], ["PHN2Zy", "svg+xml"], ["PD94bWw", "svg+xml"]];
+
+function normalizeImage(value) {
+  let s = str(value);
+  if (!s) return { src: "" };
+  if (/^https?:\/\//i.test(s)) return { src: s };
+  if (/^data:image\//i.test(s)) {
+    const [head, body = ""] = s.split(",", 2);
+    s = `${head},${body.replace(/\s+/g, "")}`;
+  } else {
+    const b64 = s.replace(/\s+/g, "");
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(b64) || b64.length < 16) {
+      return { error: '"image" phải là mã base64 của ảnh, data:image/...;base64,... hoặc link http(s)' };
+    }
+    const mime = (BASE64_MIME.find(([sig]) => b64.startsWith(sig)) || [, "png"])[1];
+    s = `data:image/${mime};base64,${b64}`;
+  }
+  if (s.length > IMAGE_MAX_CHARS) return { error: `ảnh quá lớn (${Math.round(s.length / 1024)} KB base64, tối đa ${IMAGE_MAX_CHARS / 1024} KB)` };
+  return { src: s };
+}
+
 // Chuan hoa 1 cau (khong xet phan). Tra ve { q, errors: [chuoi] }
 function normalizeOne(raw) {
   const errors = [];
@@ -436,11 +463,9 @@ function normalizeOne(raw) {
   if (/[\x08\x0c]/.test(JSON.stringify(raw))) errors.push("công thức bị hỏng do thiếu dấu \\ (hãy viết \\\\frac)");
 
   const q = { type: id, question };
-  const image = str(raw.image);
-  if (image) {
-    if (/^(data:image\/|https?:\/\/)/.test(image)) q.image = image;
-    else errors.push('"image" phải là link ảnh (http...) hoặc ảnh dán vào form');
-  }
+  const img = normalizeImage(raw.image ?? raw.image_base64);
+  if (img.error) errors.push(img.error);
+  else if (img.src) q.image = img.src;
   if (raw.points !== undefined && raw.points !== null && raw.points !== "") {
     const p = Number(String(raw.points).replace(",", "."));
     if (!(p >= 0)) errors.push('"points" phải là số ≥ 0');
@@ -566,7 +591,10 @@ function buildRulesText(template) {
   const sample = {
     title: "Kiểm tra giữa học kì I - Toán 11",
     duration_minutes: 90,
-    parts: parts.map(p => ({ type: p.type, questions: [p.t.example] }))
+    parts: parts.map((p, i) => ({
+      type: p.type,
+      questions: [i === 0 ? { ...p.t.example, image: "iVBORw0KGgoAAAANSUhEUgAA...(mã base64 của hình)" } : p.t.example]
+    }))
   };
   return [
     `QUY TẮC ĐỊNH DẠNG ĐỀ THI (JSON) — CẤU TRÚC "${template.name}"`,
@@ -578,8 +606,16 @@ function buildRulesText(template) {
     "2. KHUNG JSON",
     '   { "title": "...", "duration_minutes": 90, "parts": [ { "type": "...", "questions": [ ... ] }, ... ] }',
     '   "parts" có đúng số phần như trên, theo đúng thứ tự. Mỗi câu bắt buộc có "question".',
-    '   Tuỳ chọn cho mọi câu: "points" (điểm riêng của câu), "image" (link ảnh hình vẽ).',
+    '   Tuỳ chọn cho mọi câu: "points" (điểm riêng của câu), "image" (hình vẽ của câu).',
     '   Xuống dòng trong nội dung: \\n. Dòng bắt đầu bằng "- " là gạch đầu dòng.',
+    "",
+    '   CỘT "image" — HÌNH VẼ CỦA CÂU (mã base64):',
+    '     - Mỗi câu có tối đa 1 hình, đặt trong trường "image" của chính câu đó.',
+    '     - Giá trị là mã base64 của ảnh: "iVBORw0KGgo..." (PNG), "/9j/..." (JPEG),',
+    '       hoặc đầy đủ "data:image/png;base64,iVBORw0KGgo...", hoặc link "https://...".',
+    "     - Viết trên 1 dòng, không xuống dòng giữa mã. Dung lượng tối đa ~2 MB/ảnh.",
+    "     - Khi hiển thị: nội dung câu hỏi → hình vẽ → các phương án / ô trả lời.",
+    '     - Câu không có hình: bỏ trường "image" hoặc để "".',
     "",
     "3. QUY TẮC TỪNG DẠNG",
     ...usedTypes.flatMap(id => [`   [${QUESTION_TYPES[id].label}] "type": "${id}"`, ...QUESTION_TYPES[id].rule.map(r => `     - ${r}`)]),
@@ -594,7 +630,8 @@ function buildRulesText(template) {
     "",
     "5. CHUYỂN TỪ ĐỀ PDF",
     "   Giữ nguyên nội dung, chia đúng các phần. Lấy đáp án từ phần đáp án/lời giải của đề.",
-    '   Câu có hình vẽ: để "image" trống, giáo viên thêm hình sau trong trang quản trị.',
+    '   Câu có hình vẽ: đưa mã base64 của hình vào "image" của câu đó; nếu không trích được',
+    '   hình thì để "image": "" và giáo viên thêm hình sau trong trang quản trị.',
     "",
     "6. JSON MẪU (mỗi phần 1 câu ví dụ)",
     JSON.stringify(sample, null, 2)
@@ -611,6 +648,6 @@ function qtAddRow(btn, typeId) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     QUESTION_TYPES, DEFAULT_TEMPLATES, ROMAN, typeIdOf, getType, partLabel, maxPoints, groupByPart, questionLabel,
-    templateTotal, normalizeOne, normalizeExam, gradeAll, summarizeEntries, formatResultEntry, buildRulesText, matchTypedAnswer
+    templateTotal, normalizeOne, normalizeImage, normalizeExam, gradeAll, summarizeEntries, formatResultEntry, buildRulesText, matchTypedAnswer
   };
 }

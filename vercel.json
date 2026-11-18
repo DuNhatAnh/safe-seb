@@ -1,6 +1,12 @@
 {
   "version": 2,
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "public/js/{app,question-types}.js"
+    }
+  },
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index?path=$1" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ]
 }

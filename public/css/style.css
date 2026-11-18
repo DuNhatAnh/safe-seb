@@ -515,6 +515,9 @@ textarea.form-control {
 .q-image { display: block; max-width: 100%; max-height: 340px; margin: 8px 0; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
 .q-image-edit { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; }
 .q-image-edit img { max-width: 220px; max-height: 140px; border: 1px solid var(--border); border-radius: var(--radius); }
+.b64-input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.75rem; word-break: break-all; resize: vertical; }
+.modal-wide .rules-editor { width: 100%; min-height: 50vh; resize: vertical; line-height: 1.45; }
+tr.editing-exam td { background: #eff6ff; }
 
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 200;
@@ -551,3 +554,9 @@ textarea.form-control {
 @media (max-width: 768px) {
   .grid-3 { grid-template-columns: 1fr; }
 }
+
+/* Lockdown khi lam bai (lockdown.js) */
+body.exam-locked { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+body.exam-locked input, body.exam-locked textarea { user-select: text; -webkit-user-select: text; }
+.shield { z-index: 105; background: rgba(15, 23, 42, 0.97); }
+.log-violation { color: var(--danger); }

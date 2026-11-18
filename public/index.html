@@ -85,7 +85,7 @@
       }
     });
 
-    function handleLogin(e) {
+    async function handleLogin(e) {
       e.preventDefault();
       hideError();
 
@@ -120,11 +120,20 @@
           return;
         }
 
-        if (pass === 'admin@123') {
-          sessionStorage.setItem('safe_exam_admin_auth', 'true');
+        // Mat khau chi server biet (bien moi truong ADMIN_PASSWORD); server tra token co han 12 gio
+        try {
+          const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pass })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Khong dang nhap duoc (' + res.status + ')');
+          sessionStorage.setItem('safe_exam_admin_token', data.token);
           window.location.href = 'admin.html';
-        } else {
-          showError('Mat khau quan tri vien khong chinh xac!');
+        } catch (err) {
+          showError(err.message);
+          passwordInput.value = '';
           passwordInput.focus();
         }
       }

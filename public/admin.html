@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
   <header class="app-header">
     <div class="brand-title">Safe Exam - Bảng quản trị</div>
@@ -16,15 +18,22 @@
   <div class="admin-layout">
     <nav class="sidebar">
       <button class="sidebar-item active" data-page="pageCreate" onclick="showPage('pageCreate')">Tạo đề thi</button>
-      <button class="sidebar-item" data-page="pageStructure" onclick="showPage('pageStructure')">Định dạng cấu trúc đề</button>
-      <button class="sidebar-item" data-page="pageResults" onclick="showPage('pageResults')">Kết quả &amp; nhật ký</button>
+      <button class="sidebar-item" data-page="pageStructure" onclick="showPage('pageStructure')">Định dạng cấu trúc
+        đề</button>
+      <button class="sidebar-item" data-page="pageResults" onclick="showPage('pageResults')">Kết quả &amp; nhật
+        ký</button>
     </nav>
 
     <main class="admin-main">
       <!-- TRANG 1: Tao de thi -->
       <section id="pageCreate" class="page">
-        <div class="card">
-          <h2 style="margin-bottom: 16px;">Tạo đề thi mới</h2>
+        <div class="card" id="examEditorCard">
+          <div class="preview-head" style="margin-bottom: 16px;">
+            <h2 id="examEditorHeading">Tạo đề thi mới</h2>
+            <button type="button" id="btnCancelEdit" class="btn btn-outline btn-sm" style="display: none;"
+              onclick="cancelEditExam()">Huỷ sửa đề</button>
+          </div>
+          <div id="editExamNote" class="alert-box alert-info" style="display: none;"></div>
 
           <div class="grid-3">
             <div class="form-group">
@@ -53,11 +62,13 @@
           <div id="previewSection" style="display: none;">
             <div class="preview-head">
               <h3>Đề thi (<span id="previewCount">0</span> câu · <span id="previewPoints">0</span> điểm)</h3>
-              <button type="button" class="btn btn-outline btn-sm btn-danger-outline" onclick="cancelImport()">Huỷ import</button>
+              <button type="button" id="btnCancelImport" class="btn btn-outline btn-sm btn-danger-outline"
+                onclick="cancelImport()">Huỷ import</button>
             </div>
             <div id="previewErrors" class="alert-box alert-danger" style="display: none;"></div>
             <div id="previewList"></div>
-            <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px; margin-top: 16px;" onclick="saveExam()">Xuất bản đề thi lên hệ thống</button>
+            <button id="btnSaveExam" class="btn btn-primary btn-block" style="padding: 12px; margin-top: 16px;"
+              onclick="saveExam()">Xuất bản đề thi lên hệ thống</button>
           </div>
         </div>
 
@@ -65,8 +76,20 @@
           <h3 style="margin-bottom: 12px;">Các đề thi đã tạo</h3>
           <div class="table-responsive">
             <table>
-              <thead><tr><th>ID</th><th>Tiêu đề</th><th>Thời gian</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead>
-              <tbody id="examTableBody"><tr><td colspan="5" style="text-align: center;">Đang tải danh sách...</td></tr></tbody>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Tiêu đề</th>
+                  <th>Thời gian</th>
+                  <th>Ngày tạo</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="examTableBody">
+                <tr>
+                  <td colspan="5" style="text-align: center;">Đang tải danh sách...</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </div>
@@ -76,9 +99,11 @@
       <section id="pageStructure" class="page" hidden>
         <div class="card">
           <h2 style="margin-bottom: 8px;">Định dạng cấu trúc đề</h2>
-          <p style="margin-bottom: 12px;">Mỗi mẫu gồm các phần (I, II, III...), mỗi phần là một dạng câu với số câu và điểm mỗi câu. Khi tạo đề, chọn mẫu để kiểm tra JSON và sinh quy tắc định dạng.</p>
+          <p style="margin-bottom: 12px;">Mỗi mẫu gồm các phần (I, II, III...), mỗi phần là một dạng câu với số câu và
+            điểm mỗi câu. Khi tạo đề, chọn mẫu để kiểm tra JSON và sinh quy tắc định dạng.</p>
           <div id="structureLocalNote" class="field-hint" style="display: none; margin-bottom: 12px;">
-            Đang lưu mẫu trên trình duyệt này. Muốn dùng chung cho mọi máy admin, chạy <code>database/schema.sql</code> trên Supabase (bảng <code>app_settings</code>).
+            Đang lưu mẫu trên trình duyệt này. Muốn dùng chung cho mọi máy admin, chạy <code>database/schema.sql</code>
+            trên Supabase (bảng <code>app_settings</code>).
           </div>
 
           <div class="chip-row" id="templateTabs" style="margin-bottom: 14px;"></div>
@@ -90,7 +115,16 @@
             </div>
             <div class="table-responsive">
               <table class="tpl-table">
-                <thead><tr><th>Phần</th><th>Dạng câu</th><th>Số câu <small>(0 = tuỳ ý)</small></th><th>Điểm / câu</th><th>Cộng</th><th></th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Phần</th>
+                    <th>Dạng câu</th>
+                    <th>Số câu <small>(0 = tuỳ ý)</small></th>
+                    <th>Điểm / câu</th>
+                    <th>Cộng</th>
+                    <th></th>
+                  </tr>
+                </thead>
                 <tbody id="tplParts"></tbody>
               </table>
             </div>
@@ -100,6 +134,7 @@
             </div>
             <div class="btn-row" style="margin-top: 14px;">
               <button class="btn btn-primary" onclick="saveTemplate()">Lưu mẫu</button>
+              <button class="btn btn-outline" onclick="openRulesModal(editingTplId)">Sửa quy tắc định dạng</button>
               <button class="btn btn-outline btn-danger-outline" onclick="deleteTemplate()">Xoá mẫu</button>
             </div>
           </div>
@@ -123,8 +158,50 @@
           </div>
           <div class="table-responsive">
             <table>
-              <thead><tr><th>ID</th><th>Thí sinh</th><th>Điểm</th><th>Trạng thái</th><th>Thời lượng</th><th>Thời điểm nộp</th><th>Chi tiết</th></tr></thead>
-              <tbody id="resultsTableBody"><tr><td colspan="7" style="text-align: center;">Đang tải dữ liệu...</td></tr></tbody>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Thí sinh</th>
+                  <th>Điểm</th>
+                  <th>Trạng thái</th>
+                  <th>Thời lượng</th>
+                  <th>Thời điểm nộp</th>
+                  <th>Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody id="resultsTableBody">
+                <tr>
+                  <td colspan="7" style="text-align: center;">Đang tải dữ liệu...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="preview-head">
+            <div>
+              <h2>Sự cố phòng thi</h2>
+              <p>Mỗi lần nhập mật khẩu giám thị (đúng hoặc sai) để thí sinh thoát khẩn cấp hoặc thoát ứng dụng.</p>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Thời điểm</th>
+                  <th>Thí sinh</th>
+                  <th>Đề thi</th>
+                  <th>Loại</th>
+                  <th>Chi tiết</th>
+                  <th>Nhật ký</th>
+                </tr>
+              </thead>
+              <tbody id="eventsTableBody">
+                <tr>
+                  <td colspan="6" style="text-align: center;">Đang tải dữ liệu...</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </div>
@@ -136,13 +213,21 @@
   <div id="rulesModal" class="overlay" style="display: none; z-index: 130;">
     <div class="lock-screen modal-wide">
       <div class="modal-head">
-        <h3>Quy tắc định dạng</h3>
+        <h3 id="rulesModalTitle">Quy tắc định dạng</h3>
         <div style="display: flex; gap: 8px;">
-          <button class="btn btn-primary btn-sm" onclick="copyText(document.getElementById('rulesText').textContent, this)">Sao chép</button>
+          <button class="btn btn-primary btn-sm"
+            onclick="copyText(document.getElementById('rulesText').value, this)">Sao chép</button>
           <button class="btn btn-outline btn-sm" onclick="closeModal('rulesModal')">Đóng</button>
         </div>
       </div>
-      <pre id="rulesText" class="code-block"></pre>
+      <div id="rulesStatus" class="field-hint" style="margin-bottom: 8px;"></div>
+      <textarea id="rulesText" class="form-control code-block rules-editor" rows="22" spellcheck="false"
+        oninput="onRulesInput()"></textarea>
+      <div class="modal-foot" style="justify-content: space-between; margin-top: 10px;">
+        <button class="btn btn-outline btn-sm btn-danger-outline" id="btnResetRules" onclick="resetRules()">Khôi phục
+          mặc định</button>
+        <button class="btn btn-primary btn-sm" id="btnSaveRules" onclick="saveRules()" disabled>Lưu quy tắc</button>
+      </div>
     </div>
   </div>
 
@@ -153,20 +238,52 @@
         <h3>Nhập đề từ JSON</h3>
         <button class="btn btn-outline btn-sm" onclick="closeModal('jsonModal')">Đóng</button>
       </div>
-      <textarea id="jsonInputArea" class="form-control" rows="12" placeholder='{ "title": "...", "duration_minutes": 90, "parts": [ ... ] }'></textarea>
+      <textarea id="jsonInputArea" class="form-control" rows="25"
+        placeholder='{ "title": "...", "duration_minutes": 90, "parts": [ ... ] }'></textarea>
       <div id="jsonImportModeRow" class="radio-row" style="display: none;">
         <label><input type="radio" name="jsonImportMode" value="replace" checked> Thay thế đề hiện tại</label>
         <label><input type="radio" name="jsonImportMode" value="append"> Nối thêm vào đề</label>
       </div>
       <div id="jsonModalError" class="alert-box alert-danger" style="display: none; margin-top: 10px;"></div>
-      <div class="modal-foot">
-        <a href="#" onclick="openRulesModal(); return false;">Xem quy tắc định dạng</a>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn btn-outline" onclick="closeModal('jsonModal')">Huỷ</button>
-          <button class="btn btn-primary" onclick="submitJsonModal()">Nhập đề thi</button>
-        </div>
-      </div>
+      <button class="btn btn-outline" onclick="closeModal('jsonModal')">Huỷ</button>
+      <button class="btn btn-primary" onclick="submitJsonModal()">Nhập đề thi</button>
     </div>
+  </div>
+
+  <!-- Modal: Cau truc moi nhan dien tu JSON (sua truoc khi luu) -->
+  <div id="detectTplModal" class="overlay" style="display: none; z-index: 130;">
+    <div class="lock-screen modal-wide">
+      <div class="modal-head">
+        <h3>Cấu trúc đề mới</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('detectTplModal')">Đóng</button>
+      </div>
+      <p class="field-hint" style="margin-bottom: 12px;">Chưa có mẫu cấu trúc nào khớp với JSON. Kiểm tra và chỉnh lại mẫu
+        dưới đây, mẫu sẽ được lưu để dùng cho các đề cùng dạng sau này.</p>
+      <div class="form-group">
+        <label class="form-label" for="detectTplName">Tên mẫu</label>
+        <input type="text" id="detectTplName" class="form-control">
+      </div>
+      <div class="table-responsive">
+        <table class="tpl-table">
+          <thead>
+            <tr>
+              <th>Phần</th>
+              <th>Dạng câu</th>
+              <th>Số câu <small>(0 = tuỳ ý)</small></th>
+              <th>Điểm / câu</th>
+              <th>Cộng</th>
+            </tr>
+          </thead>
+          <tbody id="detectTplParts"></tbody>
+        </table>
+      </div>
+      <p style="margin-top: 10px;"><strong id="detectTplTotal"></strong></p>
+      <div id="detectTplError" class="alert-box alert-danger" style="display: none; margin-top: 10px;"></div>
+      <button class="btn btn-outline" onclick="closeModal('detectTplModal')">Quay lại</button>
+      <button class="btn btn-primary" onclick="confirmDetectedTemplate()">Lưu mẫu &amp; nhập đề</button>
+    </div>
+  </div>
+  </div>
   </div>
 
   <!-- Modal: Them / sua cau hoi -->
@@ -177,17 +294,26 @@
         <button class="btn btn-outline btn-sm" onclick="closeModal('questionModal')">Đóng</button>
       </div>
       <div class="form-group">
-        <label class="form-label" for="modalQText">Nội dung câu hỏi (công thức $...$, xuống dòng bằng Enter, "- " để gạch đầu dòng)</label>
+        <label class="form-label" for="modalQText">Nội dung câu hỏi (công thức $...$, xuống dòng bằng Enter, "- " để
+          gạch đầu dòng)</label>
         <textarea id="modalQText" class="form-control" rows="4" oninput="updateModalMathPreview()"></textarea>
         <div class="math-preview" id="modalQMathPreview"></div>
       </div>
       <div class="grid-2">
         <div class="form-group">
           <label class="form-label">Hình vẽ (chọn file hoặc dán ảnh Ctrl+V)</label>
-          <input type="file" id="modalQImageFile" accept="image/*" class="form-control" onchange="onImagePicked(this.files[0]); this.value='';">
+          <input type="file" id="modalQImageFile" accept="image/*" class="form-control"
+            onchange="onImagePicked(this.files[0]); this.value='';">
+          <label class="form-label" for="modalQImageB64" style="margin-top: 8px;">Hoặc dán mã base64 / link
+            ảnh</label>
+          <textarea id="modalQImageB64" class="form-control b64-input" rows="2" spellcheck="false"
+            placeholder="iVBORw0KGgo... hoặc data:image/png;base64,... hoặc https://..."
+            oninput="onImageB64Input()"></textarea>
+          <div id="modalQImageB64Err" class="field-error" style="display: none;"></div>
           <div id="modalQImageBox" class="q-image-edit" style="display: none;">
             <img id="modalQImage" alt="Hình vẽ">
-            <button type="button" class="btn btn-outline btn-sm btn-danger-outline" onclick="setModalImage('')">Xoá hình</button>
+            <button type="button" class="btn btn-outline btn-sm btn-danger-outline" onclick="setModalImage('')">Xoá
+              hình</button>
           </div>
         </div>
         <div class="form-group">
@@ -227,4 +353,5 @@
   <script src="js/question-types.js"></script>
   <script src="js/admin.js"></script>
 </body>
+
 </html>

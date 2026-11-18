@@ -1,7 +1,4 @@
-// Cau hinh Supabase REST truc tiep
-const SUPABASE_URL = "https://twavyhrlphhqsqiqvrzq.supabase.co";
-const SUPABASE_KEY = "sb_publishable_Rsbi9aTsXeusrjzg0q2Eig_FYGZW_hH";
-const PROCTOR_PASSWORD_DEFAULT = "123456";
+// Khoa Supabase va mat khau chi nam tren server (lib/api.js, bien moi truong)
 const PREFIXES = "ABCDEF";
 
 // 1. Ham an toan hoa chuoi HTML
@@ -179,42 +176,57 @@ function copyText(text, btn) {
 function openModal(id) { document.getElementById(id).style.display = "flex"; }
 function closeModal(id) { document.getElementById(id).style.display = "none"; }
 
-// 8. Ham goi API Supabase REST
-async function supabaseRequest(endpoint, method = "GET", body = null, extraHeaders = {}) {
-  const headers = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": `Bearer ${SUPABASE_KEY}`,
-    "Content-Type": "application/json",
-    "Prefer": method === "POST" ? "return=representation" : "",
-    ...extraHeaders
-  };
+// 8. Goi API cua server (lib/api.js). Trinh duyet KHONG giu khoa Supabase hay mat khau nao.
+const ADMIN_TOKEN_KEY = "safe_exam_admin_token";
 
-  const config = { method, headers };
-  if (body) {
-    config.body = JSON.stringify(body);
-  }
+async function apiRequest(route, { method = "GET", query = null, body = null } = {}) {
+  const qs = query ? "?" + new URLSearchParams(query).toString() : "";
+  const headers = { "Content-Type": "application/json" };
+  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, config);
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Loi ket noi Supabase (${response.status}): ${errorText}`);
-  }
-
-  // DELETE hoac tra ve rong
+  const response = await fetch(`/api/${route}${qs}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const text = await response.text();
-  return text ? JSON.parse(text) : null;
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (e) { data = { error: text }; }
+  if (!response.ok) {
+    const err = new Error((data && data.error) || `Lỗi máy chủ (${response.status})`);
+    err.status = response.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
 }
+
+// Trang admin: truy van bang cua he thong qua proxy co kiem tra token
+async function supabaseRequest(endpoint, method = "GET", body = null, extraHeaders = {}) {
+  try {
+    return await apiRequest("admin/rest", {
+      method: "POST",
+      body: { method, path: endpoint, body, prefer: extraHeaders.Prefer || (method === "POST" ? "return=representation" : "") }
+    });
+  } catch (err) {
+    if (err.status === 401 && typeof window !== "undefined" && /admin\.html/.test(location.pathname)) {
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      alert(err.message);
+      location.href = "index.html";
+    }
+    throw err;
+  }
+}
+
+// API cho thi sinh: de da bo dap an, nop bai de server cham, thoat can mat khau giam thi
+const StudentApi = {
+  listExams: () => apiRequest("exams"),
+  getExam: (id, student) => apiRequest("exam", { query: { id, student } }),
+  history: student => apiRequest("history", { query: { student } }),
+  submit: payload => apiRequest("submit", { method: "POST", body: payload }),
+  proctorExit: payload => apiRequest("proctor-exit", { method: "POST", body: payload }),
+  adminLogin: password => apiRequest("admin/login", { method: "POST", body: { password } })
+};
 
 // 9. Thao tac voi bang exams (Quan ly de thi)
 const ExamService = {
-  async getAvailableExams() {
-    return await supabaseRequest("exams?select=id,title,duration_minutes,assigned_to,created_at&order=id.desc");
-  },
-
-  async getAssignedExams(username) {
-    return await this.getAvailableExams();
-  },
-
   async getAllExams() {
     return await supabaseRequest("exams?select=id,title,duration_minutes,assigned_to,created_at&order=id.desc");
   },
@@ -234,6 +246,15 @@ const ExamService = {
     return await supabaseRequest("exams", "POST", payload);
   },
 
+  // Sua de thi da tao. RLS chan update -> Supabase tra mang rong.
+  async updateExam(examId, patch) {
+    const rows = await supabaseRequest(`exams?id=eq.${examId}`, "PATCH", patch, { "Prefer": "return=representation" });
+    if (!rows || rows.length === 0) {
+      throw new Error("Supabase chưa cho phép cập nhật bảng exams. Hãy chạy database/schema.sql (policy update).");
+    }
+    return rows[0];
+  },
+
   // Xoa cung de thi
   async deleteExam(examId) {
     return await supabaseRequest(`exams?id=eq.${examId}`, "DELETE");
@@ -242,20 +263,6 @@ const ExamService = {
 
 // 10. Thao tac voi bang exam_results
 const ResultService = {
-  async submitResult(examId, studentName, score, totalQuestions, durationMinutes, answers, actionLogs) {
-    const payload = {
-      exam_id: examId,
-      student_name: studentName,
-      score: parseFloat(score),
-      total_questions: parseInt(totalQuestions, 10),
-      duration_minutes: parseInt(durationMinutes, 10),
-      answers,
-      action_logs: actionLogs,
-      submitted_at: new Date().toISOString()
-    };
-    return await supabaseRequest("exam_results", "POST", payload);
-  },
-
   async getAllResults() {
     return await supabaseRequest("exam_results?select=*&order=id.desc");
   },
@@ -267,6 +274,13 @@ const ResultService = {
       throw new Error("Supabase chưa cho phép cập nhật exam_results. Hãy chạy database/schema.sql (policy update).");
     }
     return rows[0];
+  }
+};
+
+// 10a. Su co phong thi (bang exam_events). Server ghi khi giam thi nhap mat khau; admin chi doc.
+const EventService = {
+  async getAll() {
+    return await supabaseRequest("exam_events?select=*&order=id.desc");
   }
 };
 
@@ -308,26 +322,20 @@ const SettingsService = {
 };
 
 // 11. Bo theo doi thao tac lam bai (Action Tracker)
+// savedLogs: nhat ky cu (khoi phuc ban nhap). onLog: goi sau moi lan ghi (de luu nhap).
 class ActionTracker {
-  constructor() {
-    this.logs = [];
+  constructor(savedLogs = null, onLog = null) {
+    this.logs = Array.isArray(savedLogs) ? savedLogs : [];
+    this.onLog = onLog;
+    this.active = true;
     this.startTime = new Date().toISOString();
-    this.addLog("BAT_DAU", "Thi sinh bat dau lam bai");
+    if (!this.logs.length) this.addLog("BAT_DAU", "Thí sinh bắt đầu làm bài");
 
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        this.addLog("ROI_MAN_HINH", "Thi sinh vua roi khoi tab hoac chuyen man hinh");
-      } else {
-        this.addLog("QUAY_LAI", "Thi sinh quay lai man hinh bai thi");
-      }
-    });
-
-    window.addEventListener("blur", () => {
-      this.addLog("MAT_TIEU_DIEM", "Cua so bi mat tieu diem (mo popup hoac chia man hinh)");
-    });
+    // Su kien roi man hinh / mat tieu diem do Lockdown (lockdown.js) theo doi va ghi vao day
   }
 
   addLog(type, detail, questionIndex = null, selectedOption = null) {
+    if (!this.active) return;
     this.logs.push({
       time: new Date().toLocaleTimeString("vi-VN"),
       timestamp: new Date().toISOString(),
@@ -336,18 +344,27 @@ class ActionTracker {
       question_index: questionIndex,
       selected_option: selectedOption
     });
+    if (this.onLog) this.onLog();
   }
 
   getLogs() {
     return this.logs;
   }
+
+  // Ngung ghi (sau khi nop bai / thoat)
+  stop() {
+    this.active = false;
+  }
 }
+
+// Cac loai log bi coi la vi pham (to do ben admin, dem so lan)
+const VIOLATION_TYPES = ["ROI_MAN_HINH", "MAT_TIEU_DIEM", "THOAT_TOAN_MAN_HINH", "PHIM_BI_CHAN", "CHUOT_PHAI", "SAO_CHEP", "CHUOT_RA_NGOAI", "TAI_LAI_TRANG", "SAI_MAT_KHAU", "NUT_BACK"];
 
 // 12. Quan ly bo nho tam LocalStorage
 const StorageHelper = {
-  saveDraft(examId, answers, deadline) {
+  saveDraft(examId, answers, deadline, logs = null) {
     try {
-      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, deadline, savedAt: Date.now() }));
+      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, deadline, logs, savedAt: Date.now() }));
     } catch (e) {
       console.warn("Khong the luu nhap:", e);
     }

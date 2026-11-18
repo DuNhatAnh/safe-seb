@@ -28,6 +28,11 @@
       <div id="examListContainer">
         <p style="text-align: center; padding: 20px;">Đang tải danh sách đề thi...</p>
       </div>
+
+      <div id="historySection" class="card" style="margin-top: 20px;">
+        <h3 style="margin-bottom: 10px;">Lịch sử làm bài</h3>
+        <div id="historyContainer"><p class="field-hint">Đang tải...</p></div>
+      </div>
     </div>
 
     <!-- Man hinh 2: Giao dien lam bai -->
@@ -52,7 +57,12 @@
       </div>
 
       <div style="margin-top: 24px;">
+        <div id="submitHint" class="alert-box alert-info" style="display: none;"></div>
         <button id="btnSubmit" class="btn btn-primary btn-block" style="padding: 14px; font-size: 1rem;" onclick="confirmSubmit()">Nộp bài thi</button>
+      </div>
+
+      <div style="margin-top: 32px; text-align: center;">
+        <button class="btn btn-outline btn-sm btn-danger-outline" onclick="showExitDialog('emergency')">Thoát khẩn cấp (Giám thị)</button>
       </div>
     </div>
   </main>
@@ -66,20 +76,35 @@
       <p id="finalSummary" style="font-size: 0.95rem; margin-bottom: 16px;">Đúng: -- / -- câu</p>
       
       <div class="alert-box alert-info" style="text-align: left; margin-bottom: 24px;">
-        Thiết bị đang ở chế độ bảo vệ của phòng thi. Giữ nguyên màn hình và chờ giám thị mở khóa để rời phòng thi.
+        Thiết bị vẫn ở chế độ phòng thi. Bạn có thể xem lịch sử làm bài; muốn thoát ứng dụng cần giám thị nhập mật khẩu.
       </div>
 
-      <button class="btn btn-outline btn-block" style="font-size: 0.85rem;" onclick="showUnlockDialog()">Mở khóa thiết bị (Giám thị)</button>
+      <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="backToList()">Xem lịch sử làm bài</button>
+      <button class="btn btn-outline btn-block" style="font-size: 0.85rem;" onclick="showExitDialog('exit')">Thoát ứng dụng (Giám thị)</button>
     </div>
   </div>
 
-  <!-- Hop thoai nhap ma giam thi de mo khoa -->
+  <!-- Man che khi thi sinh roi bai thi (thoat toan man hinh, chuyen cua so...) - lockdown.js -->
+  <div id="viewShield" class="overlay shield" style="display: none;">
+    <div class="lock-screen">
+      <div class="lock-title" style="color: var(--danger);">BẠN ĐÃ RỜI BÀI THI</div>
+      <p id="shieldReason" style="margin-bottom: 8px;"></p>
+      <p id="shieldCount" class="field-hint" style="margin-bottom: 20px;"></p>
+      <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="Lockdown.resume()">Quay lại bài thi</button>
+      <button class="btn btn-outline btn-sm btn-danger-outline" onclick="showExitDialog('emergency')">Thoát khẩn cấp (Giám thị)</button>
+    </div>
+  </div>
+
+  <!-- Hop thoai nhap mat khau giam thi de thoat (moi lan thoat deu ghi log) -->
   <div id="viewUnlockModal" class="overlay" style="display: none; z-index: 110;">
-    <div class="lock-screen" style="max-width: 360px;">
-      <h3 style="margin-bottom: 12px;">Xác nhận Giám thị</h3>
-      <p style="margin-bottom: 16px;">Nhập mật khẩu giám thị để giải phóng thiết bị.</p>
-      
+    <div class="lock-screen" style="max-width: 380px;">
+      <h3 id="exitTitle" style="margin-bottom: 12px;">Xác nhận Giám thị</h3>
+      <p id="exitText" style="margin-bottom: 16px;">Nhập mật khẩu giám thị.</p>
+
       <form onsubmit="event.preventDefault(); verifyUnlock();">
+        <div id="exitReasonGroup" class="form-group" style="display: none;">
+          <input type="text" id="exitReason" class="form-control" placeholder="Lý do thoát (vd: thí sinh mệt, mất điện...)">
+        </div>
         <div class="form-group">
           <input type="password" id="proctorInput" class="form-control" placeholder="Nhập mật khẩu..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
         </div>
@@ -87,7 +112,7 @@
 
         <div style="display: flex; gap: 10px;">
           <button type="button" class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Hủy</button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Xác nhận</button>
+          <button type="submit" id="btnConfirmExit" class="btn btn-primary" style="flex: 1;">Xác nhận thoát</button>
         </div>
       </form>
     </div>
@@ -96,6 +121,7 @@
   <script src="vendor/katex/katex.min.js"></script>
   <script src="js/app.js"></script>
   <script src="js/question-types.js"></script>
+  <script src="js/lockdown.js"></script>
   <script src="js/exam.js"></script>
 </body>
 </html>

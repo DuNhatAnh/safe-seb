@@ -4,6 +4,8 @@
   "description": "Safe Exam - Kiosk lockdown and exam monitoring",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch-path=server.js --watch-path=lib --watch-path=.env server.js --dev",
+    "test": "node --test \"tests/**/*.test.js\""
   }
 }
