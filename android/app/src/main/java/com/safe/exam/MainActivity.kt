@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity() {
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
 
+        // Device Owner: cho phep khoa that + bat han che thiet bi (khong phai thi bo qua)
+        KioskManager.applyPolicies(this)
+
         // Gan cau noi KioskBridge vao JavaScript (exam.js goi startLock / stopLock)
         webView.addJavascriptInterface(KioskBridge(this), "KioskBridge")
 
@@ -51,12 +54,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // Kich hoat khoa man hinh (ghim ung dung) khi vao ung dung
-                try {
-                    startLockTask()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                // Khoa man hinh ngay khi mo app (Device Owner: khoa that; khong thi: ghim man hinh)
+                KioskManager.startLock(this@MainActivity)
             }
         }
 

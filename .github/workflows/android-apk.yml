@@ -1,0 +1,59 @@
+# Build app Android (file .apk) tren GitHub, khong can Android Studio tren may.
+# File cai dat co link co dinh:
+#   https://github.com/DuNhatAnh/safe-seb/releases/download/apk-latest/safe-exam.apk
+# Dia chi he thong thi trong app: bien SAFE_EXAM_URL (GitHub > Settings > Secrets and variables > Actions > Variables),
+# khong dat thi dung safeExamUrl trong android/gradle.properties.
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.5"
+
+      - name: Build APK
+        working-directory: android
+        env:
+          SAFE_EXAM_URL: ${{ vars.SAFE_EXAM_URL }}
+        run: |
+          if [ -n "$SAFE_EXAM_URL" ]; then
+            gradle assembleDebug --no-daemon -PsafeExamUrl="$SAFE_EXAM_URL"
+          else
+            gradle assembleDebug --no-daemon
+          fi
+          cp app/build/outputs/apk/debug/app-debug.apk ../safe-exam.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safe-exam-apk
+          path: safe-exam.apk
+
+      - name: Dang len link tai co dinh (release "apk-latest")
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: "Safe Exam - app Android (ban moi nhat)"
+          body: "Tai safe-exam.apk ve dien thoai Android, cai dat, mo app va bam Ghim khi duoc hoi."
+          files: safe-exam.apk
+          overwrite_files: true
+          make_latest: true

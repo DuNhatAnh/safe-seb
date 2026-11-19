@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quyen quan tri thiet bi. Device Owner dung DevicePolicyManager (lock task, han che nguoi dung), khong can them policy cu. -->
+<device-admin>
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

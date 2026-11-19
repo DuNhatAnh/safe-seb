@@ -38,6 +38,10 @@ Triển khai Vercel: khai báo đủ 5 biến trong `.env.example` ở Project S
 
 - Địa chỉ truy cập: http://localhost:3000 (hoặc http://localhost:3000/index.html)
 
+### App Android (cài về máy rồi làm bài)
+
+Học sinh tải **safe-exam.apk** (nút "Tải app" hiện trên trang đăng nhập khi mở bằng điện thoại Android), cài, mở, bấm **Ghim** là làm bài. GitHub tự build file cài (`.github/workflows/android-apk.yml`). Muốn khoá cứng hẳn (không gỡ ghim được) thì đặt app làm **Device Owner** bằng 1 lệnh `adb`. Chi tiết: [docs/android-kiosk.md](docs/android-kiosk.md).
+
 ### Safe Exam Browser (khoá máy tính khi thi)
 
 Trình duyệt thường không chặn được Alt+Tab / phím Windows. Muốn khoá hẳn máy tính: cài [Safe Exam Browser](https://safeexambrowser.org/download_en.html) (Windows / macOS / iPad) trên máy thi, rồi ở trang admin bấm **SEB** cạnh đề:

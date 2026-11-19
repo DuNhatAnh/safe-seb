@@ -2,7 +2,7 @@
 
 // Cau noi do app Android (KioskBridge.kt) gan vao WebView
 interface Window {
-  KioskBridge?: { startLock(): void; stopLock(): void };
+  KioskBridge?: { startLock(): void; stopLock(): void; isDeviceOwner?(): boolean; releaseDevice?(): void };
   katex?: { renderToString(tex: string, options?: object): string };
   webkitRequestFullscreen?: () => Promise<void>;
 }

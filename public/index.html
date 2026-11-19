@@ -53,8 +53,84 @@
           Dang nhap
         </button>
       </form>
+
+      <!-- Dien thoai Android mo bang trinh duyet: goi y tai app (khoa man hinh khi thi). File do GitHub Actions build. -->
+      <div id="apkBox" class="alert-box alert-info" style="display: none; margin-top: 18px; text-align: center;">
+        Dùng điện thoại Android? Cài app để làm bài (khoá màn hình khi thi):
+        <a id="apkLink" class="btn btn-primary btn-block" style="margin-top: 10px;" href="#">Tải app Safe Exam (.apk)</a>
+        <small class="field-hint" style="display: block;">Mở file vừa tải → Cài đặt (cho phép "nguồn không xác định" nếu được hỏi) → mở app → bấm <strong>Ghim</strong>.</small>
+      </div>
+
+      <!-- Chi hien trong app Android dang la Device Owner (thiet bi bi khoa cung): thoat / go khoa can mat khau quan tri -->
+      <div id="deviceBox" style="display: none; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center;">
+        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="showDeviceForm('exit')">Thoát ứng dụng (Quản trị)</button>
+          <button type="button" class="btn btn-outline btn-sm btn-danger-outline" onclick="showDeviceForm('release')">Gỡ khoá thiết bị</button>
+        </div>
+        <form id="deviceForm" style="display: none; margin-top: 12px;" onsubmit="submitDeviceForm(event)">
+          <p id="deviceFormText" class="field-hint" style="margin-bottom: 8px;"></p>
+          <input type="password" id="deviceAdminPass" class="form-control" placeholder="Mật khẩu quản trị" autocomplete="off">
+          <div id="deviceMsg" class="alert-box alert-danger" style="display: none; padding: 8px; font-size: 0.85rem; margin-top: 8px;"></div>
+          <button type="submit" id="btnDevice" class="btn btn-primary btn-block" style="margin-top: 8px;">Xác nhận</button>
+        </form>
+      </div>
     </div>
   </main>
+
+  <script>
+    // Link tai app Android (release "apk-latest" do .github/workflows/android-apk.yml dang)
+    const APK_URL = 'https://github.com/DuNhatAnh/safe-seb/releases/download/apk-latest/safe-exam.apk';
+    if (/Android/i.test(navigator.userAgent) && !window.KioskBridge) {
+      document.getElementById('apkLink').href = APK_URL;
+      document.getElementById('apkBox').style.display = 'block';
+    }
+
+    // App Android la Device Owner: man dang nhap cung bi khoa -> can loi thoat cho quan tri vien.
+    //   exit:    thoat ung dung (may van la Device Owner, lan sau mo app lai khoa)
+    //   release: go han Device Owner, tra dien thoai ve binh thuong
+    let deviceAction = null;
+    if (window.KioskBridge && typeof window.KioskBridge.isDeviceOwner === 'function' && window.KioskBridge.isDeviceOwner()) {
+      document.getElementById('deviceBox').style.display = 'block';
+    }
+
+    function showDeviceForm(action) {
+      deviceAction = action;
+      document.getElementById('deviceForm').style.display = 'block';
+      document.getElementById('deviceMsg').style.display = 'none';
+      document.getElementById('deviceFormText').textContent = action === 'release'
+        ? 'Gỡ hẳn chế độ khoá cứng: điện thoại trở về bình thường (muốn khoá lại phải cài đặt lại bằng adb).'
+        : 'Thoát ứng dụng thi. Lần sau mở app, thiết bị lại được khoá.';
+      document.getElementById('btnDevice').textContent = action === 'release' ? 'Gỡ khoá thiết bị' : 'Thoát ứng dụng';
+      document.getElementById('deviceAdminPass').value = '';
+      document.getElementById('deviceAdminPass').focus();
+    }
+
+    // Server kiem tra mat khau quan tri (khong luu trong app) roi moi goi xuong Android
+    async function submitDeviceForm(e) {
+      e.preventDefault();
+      const msg = document.getElementById('deviceMsg');
+      const btn = document.getElementById('btnDevice');
+      btn.disabled = true;
+      msg.style.display = 'none';
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: document.getElementById('deviceAdminPass').value.trim() })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Không xác thực được (' + res.status + ')');
+        if (deviceAction === 'release') window.KioskBridge.releaseDevice();
+        else window.KioskBridge.stopLock();
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.style.display = 'block';
+        document.getElementById('deviceAdminPass').value = '';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
 
   <script>
     const usernameInput = document.getElementById('username');
