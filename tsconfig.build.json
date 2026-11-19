@@ -1,0 +1,9 @@
+{
+  // Build JS cho Vercel: dist/server.js, dist/lib/**.js (api/index.js import dist/lib/api.js)
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "sourceMap": true
+  },
+  "include": ["server.ts", "lib/**/*.ts"]
+}

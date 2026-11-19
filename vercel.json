@@ -1,8 +1,9 @@
 {
   "version": 2,
+  "buildCommand": "npm run build",
   "functions": {
     "api/index.js": {
-      "includeFiles": "public/js/{app,question-types}.js"
+      "includeFiles": "{dist/**,public/js/app.js,public/js/question-types.js}"
     }
   },
   "rewrites": [

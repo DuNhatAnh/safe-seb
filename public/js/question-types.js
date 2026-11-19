@@ -26,7 +26,7 @@ function matchTypedAnswer(user, accepted) {
 }
 
 // O nhap dap an dung chung cho cac dang go tay (essay, short_number)
-function typedInputHtml(raw, { numeric, maxLength, placeholder, hint, boxes }) {
+function typedInputHtml(raw, { numeric = false, maxLength = 0, placeholder = "", hint = "", boxes = false }) {
   return `
     ${boxes ? '<div class="answer-boxes-label">Đáp án:</div>' : ""}
     <input type="text" class="form-control answer-input ${boxes ? "answer-boxes" : ""}" data-ans="input"
@@ -643,11 +643,4 @@ function qtAddRow(btn, typeId) {
   const list = btn.parentElement.querySelector(".ed-list");
   if (list.children.length >= PREFIXES.length) return alert(`Tối đa ${PREFIXES.length} phương án.`);
   list.insertAdjacentHTML("beforeend", QUESTION_TYPES[typeId].editorRow());
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    QUESTION_TYPES, DEFAULT_TEMPLATES, ROMAN, typeIdOf, getType, partLabel, maxPoints, groupByPart, questionLabel,
-    templateTotal, normalizeOne, normalizeImage, normalizeExam, gradeAll, summarizeEntries, formatResultEntry, buildRulesText, matchTypedAnswer
-  };
 }

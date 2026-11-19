@@ -179,9 +179,10 @@ function closeModal(id) { document.getElementById(id).style.display = "none"; }
 // 8. Goi API cua server (lib/api.js). Trinh duyet KHONG giu khoa Supabase hay mat khau nao.
 const ADMIN_TOKEN_KEY = "safe_exam_admin_token";
 
-async function apiRequest(route, { method = "GET", query = null, body = null } = {}) {
+async function apiRequest(route, { method = "GET", query = null, body = null, headers: extraHeaders = {} } = {}) {
   const qs = query ? "?" + new URLSearchParams(query).toString() : "";
-  const headers = { "Content-Type": "application/json" };
+  /** @type {Record<string, string>} */
+  const headers = { "Content-Type": "application/json", ...extraHeaders };
   const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -190,6 +191,7 @@ async function apiRequest(route, { method = "GET", query = null, body = null } =
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (e) { data = { error: text }; }
   if (!response.ok) {
+    /** @type {Error & { status?: number, data?: any }} */
     const err = new Error((data && data.error) || `Lỗi máy chủ (${response.status})`);
     err.status = response.status;
     err.data = data;
@@ -218,17 +220,32 @@ async function supabaseRequest(endpoint, method = "GET", body = null, extraHeade
 // API cho thi sinh: de da bo dap an, nop bai de server cham, thoat can mat khau giam thi
 const StudentApi = {
   listExams: () => apiRequest("exams"),
-  getExam: (id, student) => apiRequest("exam", { query: { id, student } }),
+  // entry: { password } (vua nhap) hoac { token } (ve vao de lan truoc) - gui qua header, khong de trong URL
+  getExam: (id, student, entry = {}) => apiRequest("exam", {
+    query: { id, student },
+    headers: {
+      ...(entry.password ? { "X-Exam-Password": entry.password } : {}),
+      ...(entry.token ? { "X-Exam-Entry": entry.token } : {})
+    }
+  }),
+  // Admin: mat khau vao de ({ enabled?, regenerate? })
+  entryPassword: (examId, changes = {}) => apiRequest("admin/entry-password", { method: "POST", body: { exam_id: examId, ...changes } }),
   history: student => apiRequest("history", { query: { student } }),
   submit: payload => apiRequest("submit", { method: "POST", body: payload }),
   proctorExit: payload => apiRequest("proctor-exit", { method: "POST", body: payload }),
+  // Giam thi nhap ma de cho thi sinh lam them 1 luot
+  retake: payload => apiRequest("retake", { method: "POST", body: payload }),
+  // Admin: xem / doi ma giam thi 6 so cua de
+  proctorCode: (examId, regenerate = false) => apiRequest("admin/proctor-code", { method: "POST", body: { exam_id: examId, regenerate } }),
+  // Admin: cai dat Safe Exam Browser cua de ({ require_seb?, regenerate_password? })
+  sebSettings: (examId, changes = {}) => apiRequest("admin/seb", { method: "POST", body: { exam_id: examId, ...changes } }),
   adminLogin: password => apiRequest("admin/login", { method: "POST", body: { password } })
 };
 
 // 9. Thao tac voi bang exams (Quan ly de thi)
 const ExamService = {
   async getAllExams() {
-    return await supabaseRequest("exams?select=id,title,duration_minutes,assigned_to,created_at&order=id.desc");
+    return await supabaseRequest("exams?select=id,title,duration_minutes,assigned_to,require_seb,require_password,created_at&order=id.desc");
   },
 
   async getExamDetail(examId) {
@@ -250,7 +267,7 @@ const ExamService = {
   async updateExam(examId, patch) {
     const rows = await supabaseRequest(`exams?id=eq.${examId}`, "PATCH", patch, { "Prefer": "return=representation" });
     if (!rows || rows.length === 0) {
-      throw new Error("Supabase chưa cho phép cập nhật bảng exams. Hãy chạy database/schema.sql (policy update).");
+      throw new Error("Supabase chưa cho phép cập nhật bảng exams. Hãy chạy npm run db:migrate.");
     }
     return rows[0];
   },
@@ -271,7 +288,7 @@ const ResultService = {
   async updateResult(id, patch) {
     const rows = await supabaseRequest(`exam_results?id=eq.${id}`, "PATCH", patch, { "Prefer": "return=representation" });
     if (!rows || rows.length === 0) {
-      throw new Error("Supabase chưa cho phép cập nhật exam_results. Hãy chạy database/schema.sql (policy update).");
+      throw new Error("Không cập nhật được exam_results. Hãy chạy npm run db:migrate.");
     }
     return rows[0];
   }
@@ -362,9 +379,10 @@ const VIOLATION_TYPES = ["ROI_MAN_HINH", "MAT_TIEU_DIEM", "THOAT_TOAN_MAN_HINH",
 
 // 12. Quan ly bo nho tam LocalStorage
 const StorageHelper = {
-  saveDraft(examId, answers, deadline, logs = null) {
+  // lock: { leaves, locked } so lan roi bai + bai dang bi khoa (tai lai trang khong go duoc khoa)
+  saveDraft(examId, answers, deadline, logs = null, lock = null) {
     try {
-      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, deadline, logs, savedAt: Date.now() }));
+      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, deadline, logs, lock, savedAt: Date.now() }));
     } catch (e) {
       console.warn("Khong the luu nhap:", e);
     }
@@ -386,6 +404,24 @@ const StorageHelper = {
   }
 };
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { PREFIXES, escapeHtml, textHtml, parseNumber, normalizeText, renderMath, fixJsonBackslashes };
-}
+// 13. Safe Exam Browser (SEB): SEB luon them "SEB/<phien ban>" vao User-Agent
+const Seb = {
+  isActive: () => /\bSEB\/\d/.test(navigator.userAgent),
+  // Link mo SEB voi cau hinh cua de: https -> sebs://, http (chay local) -> seb://
+  link: examId => `${location.origin}/api/seb-config?exam_id=${examId}`.replace(/^http(s?):\/\//, (m, s) => `seb${s}://`),
+  DOWNLOAD_URL: "https://safeexambrowser.org/download_en.html"
+};
+
+// 14. Ve vao de co mat khau (server cap khi nhap dung): luu de tai lai trang / vao lai khong phai nhap nua
+const EntryToken = {
+  key: (examId, student) => `safe_exam_entry_${examId}_${student}`,
+  get(examId, student) {
+    try { return localStorage.getItem(this.key(examId, student)); } catch (e) { return null; }
+  },
+  set(examId, student, token) {
+    try { localStorage.setItem(this.key(examId, student), token); } catch (e) { }
+  },
+  clear(examId, student) {
+    try { localStorage.removeItem(this.key(examId, student)); } catch (e) { }
+  }
+};

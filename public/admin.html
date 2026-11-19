@@ -102,7 +102,7 @@
           <p style="margin-bottom: 12px;">Mỗi mẫu gồm các phần (I, II, III...), mỗi phần là một dạng câu với số câu và
             điểm mỗi câu. Khi tạo đề, chọn mẫu để kiểm tra JSON và sinh quy tắc định dạng.</p>
           <div id="structureLocalNote" class="field-hint" style="display: none; margin-bottom: 12px;">
-            Đang lưu mẫu trên trình duyệt này. Muốn dùng chung cho mọi máy admin, chạy <code>database/schema.sql</code>
+            Đang lưu mẫu trên trình duyệt này. Muốn dùng chung cho mọi máy admin, chạy <code>npm run db:migrate</code>
             trên Supabase (bảng <code>app_settings</code>).
           </div>
 
@@ -331,6 +331,64 @@
   </div>
 
   <!-- Modal: Chi tiet bai lam + cham tu luan -->
+  <!-- Modal: Ma giam thi 6 so cua de (thoat khan cap, thoat ung dung, cho lam lai) -->
+  <div id="proctorCodeModal" class="overlay" style="display: none; z-index: 130;">
+    <div class="lock-screen" style="max-width: 380px;">
+      <h3 id="proctorCodeTitle" style="margin-bottom: 6px;">Mã giám thị</h3>
+      <p class="field-hint" style="margin-bottom: 4px;">Đưa mã này cho giám thị phòng thi. Dùng để: thoát khẩn cấp, thoát ứng dụng, cho thí sinh làm lại.</p>
+      <div id="proctorCodeValue" class="proctor-code">······</div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary" style="flex: 1;" onclick="copyText(document.getElementById('proctorCodeValue').textContent, this)">Sao chép</button>
+        <button class="btn btn-outline" style="flex: 1;" onclick="regenerateProctorCode()">Đổi mã mới</button>
+        <button class="btn btn-outline" onclick="closeModal('proctorCodeModal')">Đóng</button>
+      </div>
+
+      <!-- Mat khau vao de (mac dinh tat), khac ma giam thi -->
+      <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; text-align: left;">
+        <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
+          <input type="checkbox" id="entryPasswordEnabled" onchange="toggleEntryPassword()" style="margin-top: 4px;">
+          <span><strong>Mật khẩu vào đề</strong><br>
+            <span class="field-hint">Bật: học sinh phải nhập mật khẩu (giám thị đọc khi phát đề) mới bắt đầu làm được. Khác mã giám thị ở trên, nên đọc to cho cả phòng không lộ mã giám thị.</span></span>
+        </label>
+        <div id="entryPasswordBox" style="display: none; gap: 8px; align-items: center; margin-top: 10px;">
+          <div id="entryPasswordValue" class="proctor-code" style="font-size: 1.6rem; margin: 0; flex: 1; text-align: center;">······</div>
+          <button class="btn btn-outline btn-sm" onclick="copyText(document.getElementById('entryPasswordValue').textContent, this)">Sao chép</button>
+          <button class="btn btn-outline btn-sm" onclick="regenerateEntryPassword()">Đổi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Safe Exam Browser cua de -->
+  <div id="sebModal" class="overlay" style="display: none; z-index: 130;">
+    <div class="lock-screen modal-wide" style="max-width: 560px; text-align: left;">
+      <div class="modal-head">
+        <h3 id="sebModalTitle">Safe Exam Browser</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('sebModal')">Đóng</button>
+      </div>
+      <label style="display: flex; gap: 10px; align-items: flex-start; margin: 8px 0 14px; cursor: pointer;">
+        <input type="checkbox" id="sebRequire" onchange="toggleSebRequired()" style="margin-top: 4px;">
+        <span><strong>Bắt buộc làm trên Safe Exam Browser</strong><br>
+          <span class="field-hint">Trình duyệt thường không lấy được đề / nộp bài. SEB khoá Alt+Tab, phím Windows, thanh tác vụ và ứng dụng khác.</span></span>
+      </label>
+
+      <label class="form-label">Link mở bằng SEB (gửi cho học sinh / đặt trên máy phòng thi)</label>
+      <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+        <input type="text" id="sebLink" class="form-control" readonly onclick="this.select()">
+        <button class="btn btn-outline btn-sm" onclick="copyText(document.getElementById('sebLink').value, this)">Sao chép</button>
+      </div>
+      <p class="field-hint" style="margin-bottom: 14px;">Hoặc <a id="sebDownload" href="#" download>tải file .seb</a> rồi mở bằng Safe Exam Browser. Máy học sinh cần cài <a href="https://safeexambrowser.org/download_en.html" target="_blank" rel="noopener">Safe Exam Browser</a> (Windows / macOS / iPad).</p>
+
+      <label class="form-label">Mật khẩu thoát SEB (dự phòng)</label>
+      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+        <code id="sebQuitPassword" class="code-block" style="flex: 1; padding: 8px 10px;">…</code>
+        <button class="btn btn-outline btn-sm" onclick="copyText(document.getElementById('sebQuitPassword').textContent, this)">Sao chép</button>
+        <button class="btn btn-outline btn-sm" onclick="regenerateSebPassword()">Đổi</button>
+      </div>
+      <p class="field-hint">Bình thường giám thị thoát bằng <strong>mã giám thị 6 số</strong> trong bài thi (SEB tự đóng). Mật khẩu này chỉ dùng cho nút thoát của chính SEB khi không vào được bài thi.</p>
+    </div>
+  </div>
+
   <div id="detailModal" class="overlay" style="display: none;">
     <div class="lock-screen modal-wide">
       <div class="modal-head">

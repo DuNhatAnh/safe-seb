@@ -13,6 +13,15 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // Dia chi trang dang nhap: dat safeExamUrl trong android/gradle.properties
+        // (hoac build: gradlew assembleDebug -PsafeExamUrl=https://...)
+        val examUrl = (project.findProperty("safeExamUrl") as String?) ?: "http://10.0.2.2:3000/index.html"
+        buildConfigField("String", "EXAM_URL", "\"$examUrl\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {

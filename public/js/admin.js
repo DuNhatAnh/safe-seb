@@ -676,10 +676,12 @@ async function loadExistingExams() {
       ? exams.map(ex => `
         <tr class="${ex.id === editingExamId ? "editing-exam" : ""}">
           <td>#${ex.id}</td>
-          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}</td>
+          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}</td>
           <td>${ex.duration_minutes} phút</td>
           <td>${ex.created_at ? new Date(ex.created_at).toLocaleDateString("vi-VN") : "--"}</td>
           <td class="nowrap">
+            <button class="btn btn-outline btn-sm btn-icon" title="Mã giám thị 6 số" aria-label="Mã giám thị đề #${ex.id}" onclick="showProctorCode(${ex.id})"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m16 7 3 3"/><path d="m19 4 2 2"/></svg></button>
+            <button class="btn btn-outline btn-sm" title="Safe Exam Browser" onclick="showSebSettings(${ex.id})">SEB</button>
             <button class="btn btn-outline btn-sm" onclick="editExam(${ex.id})">✎ Sửa</button>
             <button class="btn btn-outline btn-sm btn-danger-outline" onclick="deleteExam(${ex.id})">Xoá</button>
           </td>
@@ -688,6 +690,92 @@ async function loadExistingExams() {
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Lỗi tải danh sách đề thi.</td></tr>';
   }
+}
+
+// =================================================== MA GIAM THI 6 SO
+// Moi de co 1 ma (server sinh ngau nhien): thoat khan cap, thoat ung dung, cho thi sinh lam lai.
+let proctorCodeExamId = null;
+
+async function showProctorCode(examId, regenerate = false) {
+  proctorCodeExamId = examId;
+  if (!regenerate) loadEntryPassword(examId);
+  const box = document.getElementById("proctorCodeValue");
+  document.getElementById("proctorCodeTitle").textContent = `Mã giám thị · Đề #${examId}`;
+  box.textContent = "······";
+  openModal("proctorCodeModal");
+  try {
+    const { code } = await StudentApi.proctorCode(examId, regenerate);
+    box.textContent = code;
+    if (regenerate) showToast("Đã đổi mã mới. Mã cũ hết hiệu lực.");
+  } catch (err) {
+    box.textContent = "Lỗi";
+    alert("Không lấy được mã giám thị: " + err.message);
+  }
+}
+
+// Mat khau vao de (mac dinh tat): bat -> hoc sinh nhap moi bat dau lam duoc. Khac ma giam thi.
+async function loadEntryPassword(examId, changes = {}) {
+  const box = document.getElementById("entryPasswordValue");
+  try {
+    const s = await StudentApi.entryPassword(examId, changes);
+    document.getElementById("entryPasswordEnabled").checked = s.enabled;
+    document.getElementById("entryPasswordBox").style.display = s.enabled ? "flex" : "none";
+    box.textContent = s.password || "······";
+    if ("enabled" in changes) {
+      showToast(s.enabled ? "Đã bật mật khẩu vào đề." : "Đã tắt mật khẩu vào đề.");
+      loadExistingExams();
+    }
+    if (changes.regenerate) showToast("Đã đổi mật khẩu vào đề. Mật khẩu cũ hết hiệu lực.");
+  } catch (err) {
+    alert("Không lấy được mật khẩu vào đề: " + err.message);
+  }
+}
+
+function toggleEntryPassword() {
+  loadEntryPassword(proctorCodeExamId, { enabled: document.getElementById("entryPasswordEnabled").checked });
+}
+
+function regenerateEntryPassword() {
+  if (!confirm("Đổi mật khẩu vào đề? Học sinh chưa vào đề phải dùng mật khẩu mới.")) return;
+  loadEntryPassword(proctorCodeExamId, { regenerate: true });
+}
+
+function regenerateProctorCode() {
+  if (!confirm("Đổi sang mã mới? Mã cũ sẽ hết hiệu lực ngay (giám thị phải dùng mã mới).")) return;
+  showProctorCode(proctorCodeExamId, true);
+}
+
+// =================================================== SAFE EXAM BROWSER
+// Moi de: bat buoc SEB hay khong, file .seb, link mo SEB, mat khau thoat SEB (du phong)
+let sebExamId = null;
+
+async function showSebSettings(examId, changes = {}) {
+  sebExamId = examId;
+  document.getElementById("sebModalTitle").textContent = `Safe Exam Browser · Đề #${examId}`;
+  openModal("sebModal");
+  try {
+    const s = await StudentApi.sebSettings(examId, changes);
+    document.getElementById("sebRequire").checked = s.require_seb;
+    document.getElementById("sebLink").value = s.seb_link;
+    document.getElementById("sebDownload").href = s.config_url;
+    document.getElementById("sebQuitPassword").textContent = s.quit_password;
+    if ("require_seb" in changes) {
+      showToast(s.require_seb ? "Đề đã bắt buộc làm trên Safe Exam Browser." : "Đã tắt bắt buộc SEB.");
+      loadExistingExams();
+    }
+    if (changes.regenerate_password) showToast("Đã đổi mật khẩu thoát SEB. Cần phát lại file .seb mới.");
+  } catch (err) {
+    alert("Không lấy được cài đặt SEB: " + err.message);
+  }
+}
+
+function toggleSebRequired() {
+  showSebSettings(sebExamId, { require_seb: document.getElementById("sebRequire").checked });
+}
+
+function regenerateSebPassword() {
+  if (!confirm("Đổi mật khẩu thoát SEB? File .seb đã phát trước đó sẽ dùng mật khẩu cũ, cần phát lại file / link mới.")) return;
+  showSebSettings(sebExamId, { regenerate_password: true });
 }
 
 async function deleteExam(examId) {
@@ -726,7 +814,9 @@ function renderLogs(logs) {
 const EVENT_LABELS = {
   THOAT_KHAN_CAP: ["Thoát khẩn cấp", "badge-red"],
   THOAT_UNG_DUNG: ["Thoát ứng dụng", "badge-muted"],
-  SAI_MAT_KHAU: ["Sai mật khẩu giám thị", "badge-amber"]
+  SAI_MAT_KHAU: ["Sai mã giám thị", "badge-amber"],
+  CHO_LAM_LAI: ["Cho làm lại", "badge-blue"],
+  MO_KHOA: ["Mở khoá bài thi", "badge-amber"]
 };
 
 async function loadEvents() {
@@ -745,7 +835,7 @@ async function loadEvents() {
         </tr>`).join("")
       : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chưa có sự cố nào.</td></tr>';
   } catch (err) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Không tải được sự cố. Hãy chạy database/schema.sql để tạo bảng exam_events.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Không tải được sự cố. Hãy chạy npm run db:migrate để tạo bảng exam_events.</td></tr>';
   }
 }
 

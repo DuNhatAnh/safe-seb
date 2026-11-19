@@ -87,10 +87,16 @@
   <!-- Man che khi thi sinh roi bai thi (thoat toan man hinh, chuyen cua so...) - lockdown.js -->
   <div id="viewShield" class="overlay shield" style="display: none;">
     <div class="lock-screen">
-      <div class="lock-title" style="color: var(--danger);">BẠN ĐÃ RỜI BÀI THI</div>
+      <div id="shieldTitle" class="lock-title" style="color: var(--danger);">BẠN ĐÃ RỜI BÀI THI</div>
       <p id="shieldReason" style="margin-bottom: 8px;"></p>
       <p id="shieldCount" class="field-hint" style="margin-bottom: 20px;"></p>
-      <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="Lockdown.resume()">Quay lại bài thi</button>
+      <!-- Bai bi khoa (roi bai nhieu lan): giam thi nhap ma 6 so cua de -->
+      <form id="shieldLocked" style="display: none; margin-bottom: 10px;" onsubmit="event.preventDefault(); unlockLockedExam();">
+        <input type="password" id="shieldCode" class="form-control" placeholder="Mã giám thị 6 số" inputmode="numeric" maxlength="20" autocomplete="off" style="text-align: center; font-size: 1.2rem; letter-spacing: 2px; margin-bottom: 10px;">
+        <div id="shieldError" class="alert-box alert-danger" style="display: none; padding: 8px; font-size: 0.85rem;"></div>
+        <button type="submit" id="btnShieldUnlock" class="btn btn-primary btn-block">Mở khoá (Giám thị)</button>
+      </form>
+      <button id="btnShieldResume" class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="Lockdown.resume()">Quay lại bài thi</button>
       <button class="btn btn-outline btn-sm btn-danger-outline" onclick="showExitDialog('emergency')">Thoát khẩn cấp (Giám thị)</button>
     </div>
   </div>
@@ -106,9 +112,9 @@
           <input type="text" id="exitReason" class="form-control" placeholder="Lý do thoát (vd: thí sinh mệt, mất điện...)">
         </div>
         <div class="form-group">
-          <input type="password" id="proctorInput" class="form-control" placeholder="Nhập mật khẩu..." style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
+          <input type="password" id="proctorInput" class="form-control" placeholder="Mã giám thị 6 số" inputmode="numeric" maxlength="20" autocomplete="off" style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
         </div>
-        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mật khẩu không đúng!</div>
+        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mã giám thị không đúng!</div>
 
         <div style="display: flex; gap: 10px;">
           <button type="button" class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Hủy</button>

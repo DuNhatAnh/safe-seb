@@ -2,11 +2,20 @@
 // Trinh duyet KHONG the chan tuyet doi Esc / Alt+Tab / phim Windows. Lop nay lam 3 viec:
 //  1. Chan nhung gi trang web chan duoc (chuot phai, sao chep, phim tat, nut Back, tai lai trang).
 //  2. Khoa ban phim trong che do toan man hinh (Keyboard Lock API - Chrome/Edge): phai GIU Esc moi thoat duoc.
-//  3. Phat hien moi lan roi bai thi (thoat toan man hinh, chuyen cua so, chuot ra ngoai) -> ghi log
-//     + che kin de thi cho toi khi thi sinh quay lai che do thi.
+//  3. Phat hien moi lan roi bai thi (thoat toan man hinh, chuyen cua so, tai lai trang...) -> ghi log
+//     + che kin de thi. Roi bai qua FREE_LEAVES lan -> KHOA BAI: chi giam thi nhap ma 6 so cua de moi mo duoc
+//     (trang thai khoa luu trong ban nhap -> tai lai trang khong go duoc khoa).
 // Tren app Android (KioskBridge) va Safe Exam Browser, he dieu hanh da khoa nen khong bat buoc toan man hinh.
+// So lan duoc roi bai ma chi bi canh bao. 0 = roi bai (thoat toan man hinh, chuyen cua so / tab,
+// tai lai trang) la KHOA NGAY, chi giam thi nhap ma cua de moi mo duoc.
+const FREE_LEAVES = 0;
+
 const Lockdown = {
   active: false,
+  leaves: 0,           // so lan roi bai (moi lan roi + quay lai = 1 lan)
+  locked: false,       // bai dang bi khoa, can ma giam thi
+  wasOk: false,        // dang o trong bai dung che do (de dem 1 lan roi bai chi 1 lan)
+  onChange: null,      // goi khi leaves / locked doi (exam.js luu ban nhap)
   tracker: null,
   violations: 0,
   suspendedUntil: 0,   // tam bo qua blur khi chinh trang mo hop thoai confirm/alert
@@ -33,10 +42,15 @@ const Lockdown = {
     return !!(document.fullscreenElement || document.webkitFullscreenElement);
   },
 
-  start(tracker) {
+  // state: { leaves, locked } khoi phuc tu ban nhap; onChange: luu lai khi doi
+  start(tracker, { leaves = 0, locked = false, onChange = null } = {}) {
     this.tracker = tracker;
     this.violations = (tracker.getLogs() || []).filter(l => VIOLATION_TYPES.includes(l.type)).length;
-    if (this.active) return;
+    this.leaves = leaves;
+    this.locked = !!locked;
+    this.wasOk = false;
+    this.onChange = onChange;
+    if (this.active) { this.check(); return; }
     this.active = true;
     document.body.classList.add("exam-locked");
 
@@ -55,7 +69,29 @@ const Lockdown = {
     for (const [target, type, fn] of this.handlers()) target.removeEventListener(type, fn, true);
     if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
     this.keyboardLocked = false;
+    this.locked = false;
+    this.onChange = null;
     this.hideShield();
+  },
+
+  state() {
+    return { leaves: this.leaves, locked: this.locked };
+  },
+
+  // Ghi nhan 1 lan roi bai; qua FREE_LEAVES lan -> khoa bai
+  recordLeave(how) {
+    this.leaves++;
+    if (this.leaves > FREE_LEAVES && !this.locked) {
+      this.locked = true;
+      this.log("KHOA_BAI", `Bài thi bị khoá: rời bài lần ${this.leaves} (${how}). Cần giám thị nhập mã để làm tiếp.`, false);
+    }
+    if (this.onChange) this.onChange();
+  },
+
+  // Giam thi da nhap dung ma (server xac nhan) -> mo khoa. So lan roi bai giu nguyen: roi tiep la khoa lai ngay.
+  unlock() {
+    this.locked = false;
+    if (this.onChange) this.onChange();
   },
 
   exitFullscreen() {
@@ -105,17 +141,41 @@ const Lockdown = {
     if (!this.active) return;
     const fsOk = !this.needFullscreen() || this.isFullscreen();
     const focusOk = !document.hidden && (document.hasFocus() || this.suspended());
-    if (fsOk && focusOk) this.hideShield();
-    else this.showShield(reason || (!fsOk ? "Bài thi yêu cầu chế độ toàn màn hình." : "Cửa sổ bài thi không còn được chọn."));
+    if (fsOk && focusOk) {
+      this.wasOk = true;
+      if (this.locked) this.showShield();
+      else this.hideShield();
+      return;
+    }
+    // Vua tu trong bai roi ra ngoai (lan dau vao chua toan man hinh thi khong tinh)
+    if (this.wasOk) {
+      this.wasOk = false;
+      this.recordLeave(!fsOk ? "thoát toàn màn hình" : "chuyển cửa sổ / tab");
+    }
+    this.showShield(reason || (!fsOk ? "Bài thi yêu cầu chế độ toàn màn hình." : "Cửa sổ bài thi không còn được chọn."));
   },
 
   showShield(reason) {
     const el = document.getElementById("viewShield");
     if (!el) return;
-    document.getElementById("shieldReason").textContent = reason;
-    document.getElementById("shieldCount").textContent = this.violations
-      ? `Số lần rời bài thi đã ghi nhận: ${this.violations}. Giám thị sẽ thấy toàn bộ trong nhật ký.`
-      : "Thao tác này được ghi vào nhật ký bài thi.";
+    const locked = this.locked;
+    const left = FREE_LEAVES - this.leaves; // so lan con duoc roi bai truoc khi bi khoa
+    document.getElementById("shieldTitle").textContent = locked ? "BÀI THI ĐÃ BỊ KHOÁ" : this.leaves ? "BẠN ĐÃ RỜI BÀI THI" : "CHẾ ĐỘ THI";
+    document.getElementById("shieldReason").textContent = locked
+      ? `Bạn đã rời bài thi ${this.leaves} lần. Gọi giám thị nhập mã giám thị để làm tiếp. Thời gian làm bài vẫn chạy.`
+      : (reason || "Bạn đã rời bài thi.");
+    document.getElementById("shieldCount").textContent = locked
+      ? "Việc mở khoá được ghi vào nhật ký gửi về quản trị viên."
+      : left > 0
+        ? `Cảnh báo: còn ${left} lần rời bài trước khi bài bị KHOÁ. Đã ghi nhận ${this.leaves} lần rời bài.`
+        : "Trong lúc làm bài, nếu thoát toàn màn hình, chuyển cửa sổ / tab hoặc tải lại trang, bài sẽ bị KHOÁ NGAY và chỉ giám thị mở được.";
+    document.getElementById("btnShieldResume").textContent = this.leaves ? "Quay lại bài thi" : "Vào làm bài (toàn màn hình)";
+    document.getElementById("shieldLocked").style.display = locked ? "block" : "none";
+    document.getElementById("btnShieldResume").style.display = locked ? "none" : "block";
+    if (el.style.display !== "flex") {
+      document.getElementById("shieldCode").value = "";
+      document.getElementById("shieldError").style.display = "none";
+    }
     el.style.display = "flex";
   },
 
@@ -196,6 +256,11 @@ const Lockdown = {
       e.returnValue = "";
     };
 
+    // Trang that su bi dong / tai lai -> tinh 1 lan roi bai (luu vao ban nhap qua onChange)
+    const onPageHide = () => {
+      if (this.active) this.recordLeave("tải lại / đóng trang");
+    };
+
     const onPopState = () => {
       history.pushState({ exam: true }, "", location.href);
       this.log("NUT_BACK", "Bấm nút Quay lại của trình duyệt");
@@ -216,6 +281,7 @@ const Lockdown = {
       [document, "selectstart", prevent(null)],
       [document, "dragstart", prevent(null)],
       [window, "beforeunload", onBeforeUnload],
+      [window, "pagehide", onPageHide],
       [window, "popstate", onPopState]
     ];
     return this._handlers;

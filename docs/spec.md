@@ -70,6 +70,8 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
 - Câu hỏi chỉ nằm trong bộ nhớ trình duyệt, không lưu file. Nút xuất bản bị khoá khi còn lỗi.
 
 ### 2.6. Xuất bản và Quản lý danh sách đề thi
+- **Mã đề** = số ngẫu nhiên 5 chữ số (10000–99999, không trùng), database tự cấp (`random_exam_id()`, ràng buộc `exams_id_five_digits`). Đề cũ đã được đổi mã, kết quả / sự cố trỏ theo.
+- Nhập đề không qua giao diện: `npm run exam:import -- file.json [--dry-run]`.
 - Xuất bản đề thi lên Supabase: Lưu thông tin đề thi và toàn bộ mảng câu hỏi có cấu trúc vào bảng `exams`.
 - Danh sách đề thi đã tạo: Hiển thị mã đề, tên đề thi, thời gian làm bài, ngày tạo.
 - Xóa cứng đề thi: Cung cấp nút "Xóa" cho từng đề thi trong danh sách. Khi quản trị viên xác nhận, hệ thống gửi lệnh `DELETE` trực tiếp lên Supabase để xóa vĩnh viễn đề thi khỏi cơ sở dữ liệu.
@@ -82,9 +84,9 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
 
 ---
 
-## 2b. BẢO MẬT PHÍA SERVER (`lib/`: Router → controllers → services → repositories → SupabaseClient)
+## 2b. BẢO MẬT PHÍA SERVER (`lib/`: Router → controllers → services → repositories → interface Database → SupabaseDatabase)
 
-- Trình duyệt không giữ khoá Supabase, mật khẩu admin hay mật khẩu giám thị. Server dùng khoá `service_role` từ biến môi trường; `database/schema.sql` bật RLS, bỏ mọi policy công khai và thu hồi quyền của `anon`/`authenticated`.
+- Trình duyệt không giữ khoá Supabase, mật khẩu admin hay mật khẩu giám thị. Server dùng khoá `service_role` từ biến môi trường; migration `0004_close_public_access` bật RLS, bỏ mọi policy công khai và thu hồi quyền của `anon`/`authenticated`.
 - Thí sinh nhận đề đã lọc đáp án (`GradingService.sanitizeQuestion`: bỏ `is_correct`, `is_true`, `answer`, `answers`, `solution`; câu tự luận chỉ kèm cờ `numeric`).
 - Server chấm bằng chính registry `question-types.js` (`GradingService` nạp vào vm), bỏ qua mọi điểm số client gửi. Thời lượng bị giới hạn tối đa bằng thời gian đề + 1 phút.
 - Mỗi thí sinh chỉ nộp 1 lần mỗi đề: nộp lại trả 409 kèm kết quả cũ (dùng khi lần trước đã lưu nhưng mất phản hồi).
@@ -99,6 +101,14 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
 | `POST /api/proctor-exit` | mật khẩu giám thị | ghi sự cố thoát |
 | `POST /api/admin/login` | mật khẩu admin | cấp token |
 | `POST /api/admin/rest` | token admin | proxy REST các bảng hệ thống |
+
+## 2c. HẠ TẦNG DATABASE (`lib/infra/`) VÀ MIGRATION
+
+- Repository chỉ dùng interface `Database` (`lib/infra/database/Database.ts`: `select / insert / update / remove` với bộ lọc, sắp xếp, giới hạn, chọn cột). Cài đặt: `SupabaseDatabase` (REST + service_role; nơi duy nhất biết cú pháp PostgREST), `MemoryDatabase` (test). Đổi database = viết thêm 1 lớp cài đặt.
+- Trang admin vẫn gửi truy vấn PostgREST thô qua proxy → đi qua interface riêng `RestGateway`, tách khỏi nghiệp vụ.
+- Thay đổi schema = file `database/migrations/NNNN_ten.sql` (tạo: `npm run db:new -- ten`). Bảng `schema_migrations` ghi file đã chạy + checksum; mỗi file chạy trong 1 transaction (lỗi → rollback); khoá advisory chống chạy trùng; file đã chạy mà bị sửa → báo lỗi (không sửa migration cũ, tạo file mới).
+- Tự áp: `npm run dev` và build Vercel chạy `db migrate --if-configured` trước (bỏ qua nếu chưa có `DATABASE_URL`). Chạy tay: `npm run db:status`, `npm run db:migrate`.
+- `DATABASE_URL`: Supabase › Connect › Session pooler (IPv4). Chỉ dùng cho migration; app chạy bằng REST.
 
 ## 3. GIAO DIỆN THÍ SINH (EXAM CLIENT)
 
@@ -137,8 +147,21 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
 
 ### 3.4. Lịch sử làm bài và điều kiện nộp
 - Màn danh sách đề có mục **Lịch sử làm bài** (đề, điểm, chờ chấm tự luận, thời lượng, thời điểm nộp) lấy từ `exam_results` theo tên thí sinh.
-- Mỗi đề chỉ nộp 1 lần: đề đã nộp hiện "Đã nộp · điểm", đề làm dở hiện "Tiếp tục làm bài", bản nháp quá hạn hiện "Nộp bài" và tự nộp khi mở.
+- Mỗi đề 1 lượt (làm lại cần mã giám thị, xem 3.4b): đề đã nộp hiện "Đã nộp · điểm" + nút "Làm lại", đề làm dở hiện "Tiếp tục làm bài", bản nháp quá hạn hiện "Nộp bài" và tự nộp khi mở.
 - Nút **Nộp bài** chỉ bật khi đã trả lời đủ mọi câu (trừ câu tự luận làm trên giấy). Hết giờ thì tự nộp bất kể.
+
+### 3.4b. Mã giám thị 6 số của đề và làm lại
+- Mỗi đề có **mã giám thị 6 số ngẫu nhiên** (`exams.proctor_code`), server tự gắn khi xuất bản (`crypto.randomInt`). Thí sinh không bao giờ nhận được mã.
+- Trang admin, danh sách đề: nút biểu tượng chìa khoá → xem mã, sao chép, **Đổi mã mới** (mã cũ hết hiệu lực ngay). Đề cũ chưa có mã được tạo mã khi bấm xem.
+- Mã dùng cho: thoát khẩn cấp, thoát ứng dụng sau khi nộp, **cho làm lại**. Đề chưa có mã thì chấp nhận `PROCTOR_PASSWORD` (.env); đề đã có mã thì chỉ nhận mã của đề.
+- Làm lại: mỗi thí sinh được 1 lượt/đề. Đề đã nộp hiện nút **Làm lại** → giám thị nhập mã → server ghi `CHO_LAM_LAI` và cấp thêm 1 lượt (số lượt = 1 + số lần `CHO_LAM_LAI`). Mỗi lượt là một bài nộp riêng trong `exam_results`, lịch sử hiện đủ các lần.
+- Mọi lần nhập mã (đúng/sai) ghi vào `exam_events`; sai 5 lần tạm khoá 5 phút.
+
+### 3.4c. Mật khẩu vào đề (mặc định tắt)
+- Admin: nút chìa khoá của đề → mục **Mật khẩu vào đề**: bật/tắt (`exams.require_password`, mặc định `false`), xem / sao chép / đổi mật khẩu 6 số (`exams.entry_password`).
+- Mật khẩu vào đề **khác mã giám thị**: giám thị đọc to cho cả phòng mà không lộ mã dùng để thoát / mở khoá / cho làm lại.
+- Bật: `GET /api/exam` cần header `X-Exam-Password` (lần đầu) hoặc `X-Exam-Entry` (vé vào đề server cấp khi nhập đúng = HMAC theo đề + thí sinh + mật khẩu hiện tại). Vé lưu ở trình duyệt nên tải lại trang / vào lại sau thoát khẩn cấp không phải nhập lại; đổi mật khẩu thì vé cũ hết hiệu lực. `POST /api/submit` phải kèm `entry_token` hợp lệ.
+- Nhập sai: ghi `SAI_MAT_KHAU` ("Nhập sai mật khẩu vào đề."), sai 5 lần tạm khoá 5 phút.
 
 ### 3.5. Thoát khẩn cấp
 - Nút **Thoát khẩn cấp (Giám thị)** trong lúc làm bài: nhập mật khẩu giám thị + lý do (tuỳ chọn).
@@ -146,11 +169,20 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
 - Mỗi lần nhập sai mật khẩu ghi `SAI_MAT_KHAU` vào nhật ký bài và `exam_events`.
 - Admin xem ở bảng **Sự cố phòng thi** (trang Kết quả). Bảng kết quả gắn nhãn "Vi phạm N" / "Thoát khẩn cấp N".
 
+### 3.5b. Safe Exam Browser (SEB) theo từng đề
+- Admin, danh sách đề → nút **SEB**: bật/tắt **Bắt buộc SEB** (`exams.require_seb`), link mở SEB (`sebs://<host>/api/seb-config?exam_id=N`, chạy local là `seb://`), tải file `.seb`, mật khẩu thoát SEB dự phòng (`exams.seb_quit_password`, chuỗi ngẫu nhiên 16 ký tự, đổi được).
+- File `.seb` (XML plist, `SebConfigService`) công khai: `startURL` = trang đăng nhập, `quitURL` = `/seb-quit.html?exam=N&k=<HMAC>` riêng từng đề, `hashedQuitPassword` = SHA-256 mật khẩu thoát (không dùng mã 6 số vì SHA-256 của 6 chữ số dò ngược được ngay), toàn màn hình, tắt tải lại / quay lại. Khoá Alt+Tab, phím Windows, ứng dụng khác dùng mặc định kiosk của SEB.
+- Đề bắt buộc SEB: server từ chối `GET /api/exam` và `POST /api/submit` nếu User-Agent không có `SEB/<phiên bản>` (403 `needsSeb`). Trình duyệt thường chỉ thấy nút "Mở bằng Safe Exam Browser".
+- Thoát trong SEB: giám thị nhập mã 6 số của đề như bình thường; server xác nhận rồi trả `seb_quit_url`, app mở trang đó → SEB tự đóng.
+- Giới hạn: nhận diện SEB qua User-Agent là mức cơ bản (chặn trình duyệt thường; công cụ chuyên dụng có thể giả mạo). Mức chặt hơn: kiểm tra header `X-SafeExamBrowser-ConfigKeyHash` (file `.seb` đã bật `sendBrowserExamKey`) — cần thử với SEB thật trước khi bật.
+
 ### 3.6. Khoá trình duyệt (`public/js/lockdown.js`)
 - Web thường: bắt buộc toàn màn hình + Keyboard Lock API (Chrome/Edge: phải giữ Esc mới thoát được). Thoát toàn màn hình, chuyển tab, Alt+Tab, mất tiêu điểm -> ghi log và che kín đề cho tới khi bấm "Quay lại bài thi".
 - Chặn: chuột phải, sao chép/cắt/dán, bôi đen, kéo thả, F5/Ctrl+R, F12/Ctrl+Shift+I, Ctrl+P/S/U, Alt+←, nút Back; cảnh báo khi đóng/tải lại trang. Chuột rời cửa sổ (màn hình thứ 2) -> ghi log.
 - Log vi phạm: `ROI_MAN_HINH`, `MAT_TIEU_DIEM`, `THOAT_TOAN_MAN_HINH`, `PHIM_BI_CHAN`, `CHUOT_PHAI`, `SAO_CHEP`, `CHUOT_RA_NGOAI`, `TAI_LAI_TRANG`, `NUT_BACK`, `SAI_MAT_KHAU` (mỗi loại tối đa 1 log / 2 giây).
 - Android Kiosk và Safe Exam Browser (nhận diện qua User-Agent `SEB/`) không bắt buộc toàn màn hình vì hệ điều hành đã khoá.
+- **Khoá bài khi rời trang** (`FREE_LEAVES = 0` trong `lockdown.js` = không có lần cảnh báo): rời bài (thoát toàn màn hình, chuyển tab/cửa sổ, tải lại / đóng trang) là bài bị **khoá ngay** (log `KHOA_BAI`): màn che không còn nút quay lại, chỉ giám thị nhập **mã 6 số của đề** mới mở được (server ghi `MO_KHOA`). Trạng thái khoá lưu trong bản nháp nên tải lại trang không gỡ được. Đã mở khoá mà rời tiếp thì khoá lại ngay. Đồng hồ vẫn chạy khi bị khoá; hết giờ vẫn tự nộp.
+- Giới hạn: trang web không thể ngăn người dùng đóng tab, Alt+Tab, phím Windows (bảo vệ của trình duyệt). Khoá cứng cần ứng dụng khoá máy: app Android (Kiosk) hoặc Safe Exam Browser.
 
 ---
 
@@ -182,7 +214,7 @@ create table if not exists exam_results (
   submitted_at timestamp with time zone default now()
 );
 ```
-- `answers`: mảng `{question_index, part, type, answer, points, max, pending}`. Câu giáo viên chấm có `points: null, pending: true` cho tới khi giáo viên nhập điểm (cần policy UPDATE trên `exam_results`, xem `schema.sql`).
+- `answers`: mảng `{question_index, part, type, answer, points, max, pending}`. Câu giáo viên chấm có `points: null, pending: true` cho tới khi giáo viên nhập điểm (server sửa qua khoá service_role).
 
 ### 4.3. Bảng `app_settings` (Cấu hình hệ thống)
 ```sql

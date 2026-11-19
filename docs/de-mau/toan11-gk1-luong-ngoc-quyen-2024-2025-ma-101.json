@@ -1,0 +1,211 @@
+{
+  "title": "Kiểm tra giữa kì I - Toán 11 - THPT Lương Ngọc Quyến, Thái Nguyên (2024-2025) - Mã đề 101",
+  "duration_minutes": 90,
+  "parts": [
+    {
+      "type": "single",
+      "questions": [
+        {
+          "question": "Trong các dãy số sau, dãy số nào không phải cấp số cộng?",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\frac{1}{2};\\frac{3}{2};\\frac{5}{2};\\frac{7}{2};\\frac{9}{2}$", "is_correct": false },
+            { "text": "$1;1;1;1;1$", "is_correct": false },
+            { "text": "$-8;-6;-4;-2;0$", "is_correct": false },
+            { "text": "$3;1;-1;-2;-4$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Cho $\\frac{\\pi}{2} < a < \\pi$. Khẳng định nào sau đây đúng?",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\tan a > 0$", "is_correct": false },
+            { "text": "$\\cos a < 0$", "is_correct": true },
+            { "text": "$\\cot a > 0$", "is_correct": false },
+            { "text": "$\\sin a < 0$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Cho dãy số $\\frac{1}{2}, \\frac{3}{5}, \\frac{2}{3}, \\frac{5}{7}, \\ldots$ Công thức tổng quát $u_n$ nào là của dãy số đã cho?",
+          "points": 0.25,
+          "options": [
+            { "text": "$u_n = \\frac{n}{2^n}, \\forall n \\in \\mathbb{N}^*$", "is_correct": false },
+            { "text": "$u_n = \\frac{n+1}{n+3}, \\forall n \\in \\mathbb{N}^*$", "is_correct": true },
+            { "text": "$u_n = \\frac{2n}{2n+1}, \\forall n \\in \\mathbb{N}^*$", "is_correct": false },
+            { "text": "$u_n = \\frac{n}{n+1}, \\forall n \\in \\mathbb{N}^*$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Cho hình chóp tứ giác $S.ABCD$. Gọi $M$ và $N$ lần lượt là trung điểm của $SA$ và $SC$. Khẳng định nào sau đây đúng?",
+          "points": 0.25,
+          "options": [
+            { "text": "$MN \\parallel (ABCD)$", "is_correct": true },
+            { "text": "$MN \\parallel (SCD)$", "is_correct": false },
+            { "text": "$MN \\parallel (SBC)$", "is_correct": false },
+            { "text": "$MN \\parallel (SAB)$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Giá trị của biểu thức $\\cos\\frac{\\pi}{30}\\cos\\frac{\\pi}{5} + \\sin\\frac{\\pi}{30}\\sin\\frac{\\pi}{5}$ là",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\frac{1}{2}$", "is_correct": false },
+            { "text": "$\\frac{\\sqrt{3}}{2}$", "is_correct": true },
+            { "text": "$\\frac{\\sqrt{3}}{4}$", "is_correct": false },
+            { "text": "$-\\frac{\\sqrt{3}}{2}$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Các yếu tố nào sau đây xác định một mặt phẳng duy nhất?",
+          "points": 0.25,
+          "options": [
+            { "text": "Một điểm và một đường thẳng.", "is_correct": false },
+            { "text": "Hai điểm phân biệt.", "is_correct": false },
+            { "text": "Hai đường thẳng cắt nhau.", "is_correct": true },
+            { "text": "Bốn điểm phân biệt.", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Tập xác định của hàm số $y = \\tan 2x$ là",
+          "points": 0.25,
+          "options": [
+            { "text": "$D = \\mathbb{R} \\setminus \\left\\{\\frac{\\pi}{4} + k\\frac{\\pi}{2} \\mid k \\in \\mathbb{Z}\\right\\}$", "is_correct": true },
+            { "text": "$D = \\mathbb{R} \\setminus \\left\\{\\frac{\\pi}{4} + k\\pi \\mid k \\in \\mathbb{Z}\\right\\}$", "is_correct": false },
+            { "text": "$D = \\mathbb{R} \\setminus \\left\\{\\frac{\\pi}{2} + k2\\pi \\mid k \\in \\mathbb{Z}\\right\\}$", "is_correct": false },
+            { "text": "$D = \\mathbb{R} \\setminus \\left\\{\\frac{\\pi}{2} + k\\pi \\mid k \\in \\mathbb{Z}\\right\\}$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Phương trình $2\\sin x - 1 = 0$ có tập nghiệm là",
+          "points": 0.25,
+          "options": [
+            { "text": "$S = \\left\\{\\frac{\\pi}{3} + k2\\pi; -\\frac{\\pi}{3} + k2\\pi, k \\in \\mathbb{Z}\\right\\}$", "is_correct": false },
+            { "text": "$S = \\left\\{\\frac{\\pi}{6} + k2\\pi; -\\frac{\\pi}{6} + k2\\pi, k \\in \\mathbb{Z}\\right\\}$", "is_correct": false },
+            { "text": "$S = \\left\\{\\frac{\\pi}{3} + k2\\pi; \\frac{2\\pi}{3} + k2\\pi, k \\in \\mathbb{Z}\\right\\}$", "is_correct": false },
+            { "text": "$S = \\left\\{\\frac{\\pi}{6} + k2\\pi; \\frac{5\\pi}{6} + k2\\pi, k \\in \\mathbb{Z}\\right\\}$", "is_correct": true }
+          ]
+        },
+        {
+          "question": "Trong các hàm số sau đây, hàm số nào có đồ thị nhận trục tung làm trục đối xứng?",
+          "points": 0.25,
+          "options": [
+            { "text": "$y = \\cos x$", "is_correct": true },
+            { "text": "$y = \\sin x$", "is_correct": false },
+            { "text": "$y = \\tan x$", "is_correct": false },
+            { "text": "$y = \\cot x$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Rút gọn biểu thức $M = \\cos 2x \\cdot \\cos x + \\sin 2x \\cdot \\sin x$ ta được kết quả là:",
+          "points": 0.25,
+          "options": [
+            { "text": "$M = \\sin x$", "is_correct": false },
+            { "text": "$M = \\sin 3x$", "is_correct": false },
+            { "text": "$M = \\cos x$", "is_correct": true },
+            { "text": "$M = \\cos 3x$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Hằng ngày mực nước của con kênh lên xuống theo thủy triều. Độ sâu $h$ (mét) của mực nước trong kênh được tính tại thời điểm $t$ (giờ) trong một ngày bởi công thức $h = 3\\cos\\left(\\frac{\\pi t}{8} + \\frac{\\pi}{4}\\right) + 12$. Để tìm thời điểm mực nước trong kênh lớn nhất ta giải phương trình nào trong các phương trình sau đây?",
+          "points": 0.25,
+          "options": [
+            { "text": "$\\cos\\left(\\frac{\\pi t}{8} + \\frac{\\pi}{4}\\right) = 12$", "is_correct": false },
+            { "text": "$\\cos\\left(\\frac{\\pi t}{8} + \\frac{\\pi}{4}\\right) = 1$", "is_correct": true },
+            { "text": "$\\cos\\left(\\frac{\\pi t}{8} + \\frac{\\pi}{4}\\right) = -1$", "is_correct": false },
+            { "text": "$\\cos\\left(\\frac{\\pi t}{8} + \\frac{\\pi}{4}\\right) = 0$", "is_correct": false }
+          ]
+        },
+        {
+          "question": "Trong các mệnh đề sau, mệnh đề nào đúng?",
+          "points": 0.25,
+          "options": [
+            { "text": "Hai đường thẳng chéo nhau khi chúng không đồng phẳng.", "is_correct": true },
+            { "text": "Hai đường thẳng có một điểm chung thì chúng có vô số điểm chung khác.", "is_correct": false },
+            { "text": "Hai đường thẳng song song khi chúng không có điểm chung.", "is_correct": false },
+            { "text": "Hai đường thẳng song song khi chúng không đồng phẳng.", "is_correct": false }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "true_false",
+      "questions": [
+        {
+          "question": "Cho hai hình bình hành $ABCD$ và $ABEF$ có chung cạnh $AB$ và không đồng phẳng, có tâm lần lượt là $I$ và $J$. Khi đó:",
+          "points": 1,
+          "statements": [
+            { "text": "$IJ \\parallel (CDFE)$.", "is_true": true },
+            { "text": "$IJ \\parallel (ADF)$.", "is_true": true },
+            { "text": "$IJ \\parallel (CEB)$.", "is_true": true },
+            { "text": "$IJ \\parallel (CEA)$.", "is_true": false }
+          ]
+        },
+        {
+          "question": "Cho $\\sin\\alpha = \\frac{2}{3}$ với $\\frac{\\pi}{2} < \\alpha < \\pi$. Khi đó:",
+          "points": 1,
+          "statements": [
+            { "text": "$\\cos\\left(\\frac{\\pi}{4} - \\alpha\\right) = \\frac{\\sqrt{10} - 2\\sqrt{2}}{6}$", "is_true": false },
+            { "text": "$\\tan\\alpha = -\\frac{2\\sqrt{5}}{5}$", "is_true": true },
+            { "text": "$\\cos\\left(\\frac{\\pi}{3} + \\alpha\\right) = \\frac{\\sqrt{5} - 2\\sqrt{3}}{6}$", "is_true": false },
+            { "text": "$\\cos\\alpha = -\\frac{\\sqrt{5}}{3}$", "is_true": true }
+          ]
+        },
+        {
+          "question": "Cho tứ diện $ABCD$. Gọi $I, J$ lần lượt là trung điểm của $AD, BC$. Gọi $M$ là một điểm trên cạnh $AB$, $N$ là một điểm trên cạnh $AC$. Khi đó:",
+          "points": 1,
+          "statements": [
+            { "text": "$BI$ là giao tuyến của hai mặt phẳng $(BCI)$ và $(ABD)$.", "is_true": true },
+            { "text": "Giao tuyến của hai mặt phẳng $(IBC)$ và $(DMN)$ song song với đường thẳng $IJ$.", "is_true": false },
+            { "text": "$ND$ là giao tuyến của hai mặt phẳng $(MND)$ và $(ADC)$.", "is_true": true },
+            { "text": "$IJ$ là giao tuyến của hai mặt phẳng $(IBC)$ và $(JAD)$.", "is_true": true }
+          ]
+        },
+        {
+          "question": "Cho hình chóp $S.ABCD$ có $ABCD$ là hình bình hành. Khi đó:",
+          "points": 1,
+          "statements": [
+            { "text": "$SC$ và $AB$ chéo nhau.", "is_true": true },
+            { "text": "$SA$ song song với $BC$.", "is_true": false },
+            { "text": "$SA$ cắt $SC$.", "is_true": true },
+            { "text": "$AB$ song song với $CD$.", "is_true": true }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "short_number",
+      "questions": [
+        {
+          "question": "Tập giá trị của hàm số $y = 5 + 4\\sin 2x\\cos 2x$ là $T = [a; b]$, tính $b - a$.",
+          "points": 0.5,
+          "answer": "4"
+        },
+        {
+          "question": "Cho $\\tan x = -2$. Tính giá trị của biểu thức $A = \\frac{3\\sin x - 5\\cos x}{4\\sin x + \\cos x}$ (làm tròn kết quả đến hàng phần trăm).",
+          "points": 0.5,
+          "answer": "1,57"
+        },
+        {
+          "question": "Litva là nước thành viên Liên minh châu Âu, đã gia nhập khu vực đồng tiền chung châu Âu thông qua việc sử dụng đồng Euro vào ngày 01 tháng 01 năm 2015. Để kỷ niệm thời khắc lịch sử này, chính quyền đất nước này quyết định dùng $122550$ đồng tiền xu Litas Lithuania cũ của đất nước để xếp một mô hình kim tự tháp. Biết rằng tầng dưới cùng có $4901$ đồng và cứ lên thêm một tầng thì số đồng xu giảm đi $100$ đồng. Hỏi mô hình kim tự tháp này có tất cả bao nhiêu tầng?",
+          "points": 0.5,
+          "answer": "50"
+        },
+        {
+          "question": "Cho cấp số cộng $(u_n)$ biết $\\begin{cases} 2u_3 + u_5 = -18 \\\\ u_6 - 3u_4 = 8 \\end{cases}$. Tính tổng của $15$ số hạng đầu của cấp số cộng đó.",
+          "points": 0.5,
+          "answer": "-285"
+        },
+        {
+          "question": "Nhiệt độ ngoài trời ở một thành phố $A$ vào các thời điểm khác nhau trong ngày được xác định bởi công thức $h(t) = 29 + 3\\sin\\left[\\frac{\\pi}{12}(t - 9)\\right]$, với $h$ tính bằng độ C và $t$ là thời gian trong ngày tính bằng giờ. Nhiệt độ thấp nhất trong ngày xảy ra vào lúc mấy giờ?",
+          "points": 0.5,
+          "answer": "3"
+        },
+        {
+          "question": "Cho dãy số $(u_n)$, biết $u_n = \\frac{2n+5}{5n-4}$. Số $\\frac{7}{12}$ là số hạng thứ mấy của dãy số đó?",
+          "points": 0.5,
+          "answer": "8"
+        }
+      ]
+    }
+  ]
+}

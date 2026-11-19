@@ -27,3 +27,13 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Build TypeScript (Vercel tu build)
+dist/
+
+# Ket qua test giao dien (Playwright)
+test-results/
+playwright-report/
+
+# Android Studio tu tao (duong dan SDK tren may)
+android/local.properties

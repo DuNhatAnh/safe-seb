@@ -1,0 +1,32 @@
+{
+  // Backend TypeScript. Node 24 chay thang file .ts (type stripping) nen dev khong can build.
+  // `npm run typecheck` kiem tra; `npm run build` xuat JS ra dist/ (cho Vercel).
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    // Chi dung cu phap Node xoa duoc kieu (khong enum, namespace, parameter property...)
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    // Import ghi duoi .ts; khi build tu doi thanh .js
+    "rewriteRelativeImportExtensions": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": false,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true
+  },
+  "include": ["server.ts", "lib/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "playwright.config.ts"]
+}
