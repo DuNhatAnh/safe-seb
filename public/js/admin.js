@@ -46,6 +46,46 @@ function showPage(pageId) {
   if (pageId === "pageCreate") loadExistingExams();
   if (pageId === "pageStructure") renderStructurePage();
   if (pageId === "pageResults") loadResults();
+  if (pageId === "pageVersions") loadVersions();
+}
+
+// =================================================== LICH SU PHIEN BAN (bang app_versions)
+// Noi dung thay doi la markdown don gian tu CHANGELOG.md: "- " dong, **dam**, `ma`
+function changelogHtml(md) {
+  const inline = s => escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`(.+?)`/g, "<code>$1</code>");
+  const items = String(md || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return `<ul class="version-notes">${items.map(l => `<li>${inline(l.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
+}
+
+const cmpVersion = (a, b) => {
+  const p = v => (/(\d+)\.(\d+)/.exec(String(v)) || [0, 0, 0]).slice(1).map(Number);
+  const [x, y] = [p(a), p(b)];
+  return x[0] - y[0] || x[1] - y[1];
+};
+
+async function loadVersions() {
+  const body = document.getElementById("versionTableBody");
+  const current = document.getElementById("versionCurrent");
+  try {
+    const [rows, info] = await Promise.all([
+      supabaseRequest("app_versions?select=version,released_at,notes,requires_app_update"),
+      fetch("/api/version", { cache: "no-store" }).then(r => r.json()).catch(() => null)
+    ]);
+    const list = (rows || []).sort((a, b) => cmpVersion(b.version, a.version));
+    current.innerHTML = info
+      ? `Đang chạy bản <strong>${escapeHtml(info.version)}</strong> (${escapeHtml(info.commit)}). ` +
+        (info.min_app_version ? `App Android phải từ bản <strong>${escapeHtml(info.min_app_version)}</strong> trở lên.` : "Hiện không chặn app Android cũ.")
+      : "Không đọc được phiên bản đang chạy.";
+    body.innerHTML = list.length ? list.map(v => `
+      <tr>
+        <td><strong>${escapeHtml(v.version)}</strong>${info && v.version === info.version ? ' <span class="badge badge-blue">Đang chạy</span>' : ""}</td>
+        <td class="nowrap">${v.released_at ? new Date(v.released_at).toLocaleDateString("vi-VN") : "--"}</td>
+        <td>${changelogHtml(v.notes)}</td>
+        <td>${v.requires_app_update ? '<span class="badge badge-red">Bắt buộc cài lại app</span>' : '<span class="badge badge-muted">Không cần</span>'}</td>
+      </tr>`).join("") : '<tr><td colspan="4">Chưa có dữ liệu (chạy npm run db:versions hoặc deploy lại).</td></tr>';
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="4">Không tải được lịch sử phiên bản: ${escapeHtml(err.message)}</td></tr>`;
+  }
 }
 
 function showErrorList(boxId, title, errors) {
@@ -696,7 +736,7 @@ async function loadExistingExams(page = adminExamState.page) {
       ? exams.map(ex => `
         <tr class="${ex.id === editingExamId ? "editing-exam" : ""}">
           <td>#${ex.id}</td>
-          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}${ex.lock_on_leave ? ' <span class="badge badge-red">Khoá khi rời trang</span>' : ""}${ex.allow_retake ? ' <span class="badge badge-green">Làm lại nhiều lần</span>' : ""}</td>
+          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}${ex.lock_on_leave ? ' <span class="badge badge-red">Khoá khi rời trang</span>' : ""}${ex.allow_retake ? ' <span class="badge badge-green">Làm lại tối đa 3 lần</span>' : ""}</td>
           <td>${ex.duration_minutes} phút</td>
           <td>${ex.created_at ? new Date(ex.created_at).toLocaleDateString("vi-VN") : "--"}</td>
           <td class="nowrap">
@@ -755,7 +795,7 @@ const EXAM_FLAGS = {
   },
   allow_retake: {
     box: "allowRetakeEnabled",
-    on: "Đã bật: thí sinh làm lại bao nhiêu lần cũng được, không cần mật khẩu.",
+    on: "Đã bật: thí sinh làm tối đa 3 lần không cần mật khẩu, từ lần thứ 4 phải nhập mật khẩu đề.",
     off: "Đã tắt: mỗi thí sinh làm 1 lần, làm lại phải nhập mật khẩu đề."
   }
 };

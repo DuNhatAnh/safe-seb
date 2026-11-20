@@ -25,14 +25,35 @@ function matchTypedAnswer(user, accepted) {
   return u !== "" && accepted.some(a => normalizeText(a) === u);
 }
 
+// Ban phim so rieng cho o dap an so: du chu so va dau (- , . / dau cach), khong phu thuoc ban phim cua may
+// (ban phim so cua nhieu dien thoai thieu dau "-" hoac "/"). exam.js xu ly bam phim (data-key).
+const KEYPAD_ROWS = [
+  [["7", "7"], ["8", "8"], ["9", "9"], ["back", "Xoá"]],
+  [["4", "4"], ["5", "5"], ["6", "6"], ["-", "-"]],
+  [["1", "1"], ["2", "2"], ["3", "3"], ["/", "/"]],
+  [["0", "0"], [",", ","], [".", "."], ["space", "Dấu cách"]]
+];
+
+function numberKeypadHtml() {
+  const key = ([k, label]) => `<button type="button" class="keypad-key${/^\d$/.test(k) ? "" : " keypad-key-sym"}" data-key="${k}" aria-label="${k === "back" ? "Xoá 1 ký tự" : k === "space" ? "Dấu cách" : label}">${escapeHtml(label)}</button>`;
+  return `
+    <div class="num-keypad" role="group" aria-label="Bàn phím nhập số">
+      ${KEYPAD_ROWS.map(row => row.map(key).join("")).join("")}
+      <button type="button" class="keypad-key keypad-key-sym keypad-wide" data-key="clear">Xoá hết</button>
+    </div>`;
+}
+
 // O nhap dap an dung chung cho cac dang go tay (essay, short_number)
+// O so: inputmode="none" -> dien thoai khong bat ban phim cua may, dung ban phim rieng ben duoi
+// (may tinh van go phim binh thuong).
 function typedInputHtml(raw, { numeric = false, maxLength = 0, placeholder = "", hint = "", boxes = false }) {
   return `
     ${boxes ? '<div class="answer-boxes-label">Đáp án:</div>' : ""}
     <input type="text" class="form-control answer-input ${boxes ? "answer-boxes" : ""}" data-ans="input"
-      ${numeric ? 'inputmode="decimal"' : ""} ${maxLength ? `maxlength="${maxLength}"` : ""}
+      ${numeric ? 'inputmode="none"' : ""} ${maxLength ? `maxlength="${maxLength}"` : ""}
       placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(raw ?? "")}" autocomplete="off">
     <div class="field-error" style="display:none;"></div>
+    ${numeric ? numberKeypadHtml() : ""}
     <div class="field-hint">${escapeHtml(hint)}</div>`;
 }
 

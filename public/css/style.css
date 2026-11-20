@@ -600,3 +600,23 @@ body.exam-locked input, body.exam-locked textarea { user-select: text; -webkit-u
 .welcome-tier-reward { font-size: 1.15rem; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
 .welcome-tier-top { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
 .welcome-tier-top .welcome-tier-score { font-weight: 600; }
+
+/* Ban phim so rieng duoi o dap an so (khong dung ban phim cua may) */
+.num-keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 6px; max-width: 320px; user-select: none; -webkit-user-select: none; }
+.keypad-key { min-height: 44px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-main); font-size: 1.15rem; font-weight: 600; cursor: pointer; touch-action: manipulation; font-variant-numeric: tabular-nums; }
+.keypad-key:hover { border-color: var(--primary-border); background: var(--primary-light); }
+.keypad-key:active { background: var(--primary-border); }
+.keypad-key-sym { background: var(--bg); color: var(--primary); font-size: 1rem; }
+.keypad-wide { grid-column: 1 / -1; font-size: 0.95rem; }
+
+/* Logo: khien + dau tick (public/img/logo.svg) */
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-logo { width: 28px; height: 28px; flex-shrink: 0; display: block; }
+.login-logo { display: block; width: 56px; height: 56px; margin: 0 auto 12px; }
+
+/* Lich su phien ban (admin) + thong bao can cap nhat */
+.version-table { width: 100%; border-collapse: collapse; }
+.version-table th, .version-table td { text-align: left; vertical-align: top; padding: 10px; border-bottom: 1px solid var(--border); }
+.version-notes { margin: 0; padding-left: 18px; }
+.version-notes li { margin-bottom: 4px; line-height: 1.5; }
+.update-steps { text-align: left; margin: 0 0 16px 20px; line-height: 1.7; }

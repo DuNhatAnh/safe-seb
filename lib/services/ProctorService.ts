@@ -3,6 +3,8 @@
 //   - mo khoa bai thi bi khoa vi roi trang nhieu lan (MO_KHOA)
 //   - cho thi sinh lam lai them 1 luot (CHO_LAM_LAI)
 // Dung / sai deu ghi vao exam_events. Thoat khan cap xong thi sinh ve danh sach de (khong dong app / SEB).
+// THOAT (khan cap / ung dung): luot 1..FREE_RETAKE_ATTEMPTS nhan mat khau mac dinh hoac ma rieng cua de;
+// tu luot tiep theo (luot thu 4) CHI nhan mat khau mac dinh PROCTOR_PASSWORD.
 import type { Config } from "../config.ts";
 import { ConflictError, UnauthorizedError, ValidationError } from "../errors.ts";
 import type { EventStore } from "../repositories/EventRepository.ts";
@@ -11,7 +13,7 @@ import type { RateLimiter } from "../security/RateLimiter.ts";
 import { matchesExamPassword } from "../security/examPassword.ts";
 import type { EventType, ExamRow, UntrustedBody } from "../types.ts";
 import { cleanLogs, cleanString, isId } from "../utils/input.ts";
-import type { AttemptService } from "./AttemptService.ts";
+import { FREE_RETAKE_ATTEMPTS, type AttemptService } from "./AttemptService.ts";
 
 type ExitType = Extract<EventType, "THOAT_KHAN_CAP" | "THOAT_UNG_DUNG" | "MO_KHOA">;
 const EXIT_TYPES: readonly ExitType[] = ["THOAT_KHAN_CAP", "THOAT_UNG_DUNG", "MO_KHOA"];
@@ -96,12 +98,21 @@ export class ProctorService {
     };
   }
 
+  // Thoat khi dang lam luot thu (FREE_RETAKE_ATTEMPTS + 1) tro di -> khong nhan ma rieng cua de
+  private async ownCodeAllowed(target: Target, action: Exclude<EventType, "SAI_MAT_KHAU">): Promise<boolean> {
+    if (action !== "THOAT_KHAN_CAP" && action !== "THOAT_UNG_DUNG") return true;
+    if (!target.exam) return false;
+    const { used } = await this.attempts.status(target.exam, target.base.student_name);
+    return used + 1 <= FREE_RETAKE_ATTEMPTS; // luot dang lam = so lan da nop + 1
+  }
+
   private async verify(target: Target, password: unknown, action: Exclude<EventType, "SAI_MAT_KHAU">): Promise<void> {
     const ipKey = `pw:${target.ip}`;
     this.ipLimiter?.assertNotLocked(ipKey);
     this.limiter.assertNotLocked(target.lockKey);
-    // Mat khau chung (PROCTOR_PASSWORD) hoac ma rieng cua dung de nay
-    if (matchesExamPassword(cleanString(password, 100), target.exam, this.config.proctorPassword)) {
+    // Mat khau mac dinh luon dung duoc. Ma rieng cua dung de nay: dung duoc tru khi THOAT tu luot thu 4
+    const ownCodeAllowed = await this.ownCodeAllowed(target, action);
+    if (matchesExamPassword(cleanString(password, 100), ownCodeAllowed ? target.exam : null, this.config.proctorPassword)) {
       this.limiter.reset(target.lockKey);
       this.ipLimiter?.reset(ipKey);
       return;

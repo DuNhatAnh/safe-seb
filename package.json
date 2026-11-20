@@ -5,10 +5,10 @@
   "main": "server.ts",
   "scripts": {
     "start": "node server.ts",
-    "dev": "node scripts/db.ts migrate --if-configured && node --watch-path=server.ts --watch-path=lib --watch-path=.env server.ts --dev",
+    "dev": "node scripts/db.ts migrate --if-configured && node scripts/db.ts sync-versions --if-configured && node --watch-path=server.ts --watch-path=lib --watch-path=.env server.ts --dev",
     "test": "node --test \"tests/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.web.json",
-    "build": "node scripts/db.ts migrate --if-configured && tsc -p tsconfig.build.json",
+    "build": "node scripts/db.ts migrate --if-configured && node scripts/db.ts sync-versions --if-configured && tsc -p tsconfig.build.json",
     "check": "npm run typecheck && npm test && npm run test:e2e",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -16,6 +16,7 @@
     "db:status": "node scripts/db.ts status",
     "db:migrate": "node scripts/db.ts migrate",
     "db:new": "node scripts/db.ts new",
+    "db:versions": "node scripts/db.ts sync-versions",
     "exam:import": "node scripts/import-exam.ts",
     "version:small": "node scripts/bump-version.ts small",
     "version:big": "node scripts/bump-version.ts big"

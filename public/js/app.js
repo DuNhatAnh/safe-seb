@@ -386,7 +386,8 @@ class ActionTracker {
 }
 
 // Cac loai log bi coi la vi pham (to do ben admin, dem so lan)
-const VIOLATION_TYPES = ["ROI_MAN_HINH", "MAT_TIEU_DIEM", "THOAT_TOAN_MAN_HINH", "PHIM_BI_CHAN", "CHUOT_PHAI", "SAO_CHEP", "CHUOT_RA_NGOAI", "TAI_LAI_TRANG", "SAI_MAT_KHAU", "NUT_BACK"];
+const VIOLATION_TYPES = ["ROI_MAN_HINH", "MAT_TIEU_DIEM", "THOAT_TOAN_MAN_HINH", "PHIM_BI_CHAN", "CHUOT_PHAI", "SAO_CHEP", "CHUOT_RA_NGOAI", "TAI_LAI_TRANG", "SAI_MAT_KHAU", "NUT_BACK",
+  "CUA_SO_NOI", "CHIA_MAN_HINH", "CHUP_MAN_HINH", "IN_TRANG", "KEO_THA"];
 
 // 12. Quan ly bo nho tam LocalStorage
 const StorageHelper = {

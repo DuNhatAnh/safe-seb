@@ -1,5 +1,5 @@
 // Chuc nang quan trong 2: hoc sinh lam de va nop bai
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { FULL_EXAM, FULL_EXAM_CODE, FULL_EXAM_RIGHT } from "./support/fixtures.ts";
 import { PROCTOR_PASSWORD } from "./support/env.ts";
 import { acceptDialogs, answerCurrent, dbState, leaveExam, loginStudent, resetDb, returnToExam, seed, updateRow, type StudentAnswer } from "./support/helpers.ts";
@@ -153,7 +153,7 @@ test("làm lại lần 2 (mặc định): phải nhập đúng mật khẩu đ�
   await expect(page.locator("#viewExamPlay")).toBeVisible();
 });
 
-test("đề bật cho làm lại nhiều lần: bấm Làm lại là vào làm ngay, không hỏi mật khẩu", async ({ page }) => {
+test("đề bật cho làm lại: 3 lần đầu bấm Làm lại là vào ngay; lần 4 phải nhập mật khẩu đề", async ({ page }) => {
   acceptDialogs(page);
   await updateRow("exams", examId, { allow_retake: true });
   await startExam(page, "hs_lam_nhieu");
@@ -168,9 +168,50 @@ test("đề bật cho làm lại nhiều lần: bấm Làm lại là vào làm n
       await expect(page.locator("#viewExamPlay")).toBeVisible();
     }
   }
-  const { exam_results, exam_events } = await dbState();
+  let { exam_results, exam_events } = await dbState();
   expect(exam_results).toHaveLength(3);
   expect(exam_events.filter(e => e.type === "CHO_LAM_LAI")).toHaveLength(0);
+
+  // Lan 4: hoi mat khau de (mat khau rieng cua de dung duoc)
+  await page.getByRole("button", { name: "Làm lại" }).click();
+  await expect(page.locator("#viewUnlockModal")).toBeVisible();
+  await expect(page.locator("#exitTitle")).toHaveText("Làm lại bài thi");
+  await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
+  await page.locator("#btnConfirmExit").click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  ({ exam_events } = await dbState());
+  expect(exam_events.filter(e => e.type === "CHO_LAM_LAI")).toHaveLength(1);
+
+  // Lan 4: thoat khan cap bang mat khau rieng cua de bi tu choi, mat khau mac dinh thi duoc
+  await page.getByRole("button", { name: "Thoát khẩn cấp (Giám thị)" }).first().click();
+  await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
+  await page.locator("#btnConfirmExit").click();
+  await expect(page.locator("#unlockError")).toBeVisible(); // cho loi THAT tu server (o loi co san chu mac dinh khi an)
+  await expect(page.locator("#unlockError")).toContainText("Mật khẩu đề không đúng");
+  await page.locator("#proctorInput").fill(PROCTOR_PASSWORD);
+  await page.locator("#btnConfirmExit").click();
+  await expect(page.locator("#viewExamList")).toBeVisible();
+});
+
+test("bàn phím số riêng: bấm phím nhập được dấu - , . / và số; Xoá / Xoá hết; tối đa 4 ký tự", async ({ page }) => {
+  await startExam(page, "hs_ban_phim");
+  await page.locator(".q-nav-btn").nth(3).click(); // cau tra loi ngan (so)
+  const input = page.locator("#optionsContainer [data-ans=input]");
+  await expect(input).toHaveAttribute("inputmode", "none"); // dien thoai khong bat ban phim cua may
+  const pad = page.locator(".num-keypad");
+  const press = async (...keys: string[]) => { for (const k of keys) await pad.locator(`[data-key="${k}"]`).click(); };
+  await press("-", "1", "/", "2");
+  await expect(input).toHaveValue("-1/2");
+  await press("3"); // qua 4 ky tu -> bo qua
+  await expect(input).toHaveValue("-1/2");
+  await press("back", "back", "back", "back", "0", ",", "5");
+  await expect(input).toHaveValue("0,5");
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
+  await press("clear");
+  await expect(input).toHaveValue("");
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 0 / 5");
+  await press("2", ".", "5");
+  await expect(input).toHaveValue("2.5");
 });
 
 test("đang làm lượt 2 thì admin tắt \"làm lại nhiều lần\": tải lại trang vẫn làm tiếp và nộp được, không mất bài", async ({ page }) => {
@@ -221,6 +262,114 @@ test("cùng 1 trình duyệt: bài làm dở của thí sinh này không hiện 
   await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toContainText("Đang làm dở");
   await page.getByRole("button", { name: "Tiếp tục làm bài" }).click();
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
+});
+
+test("app Android báo có bong bóng chat / mất tiêu điểm → che bài thi, ghi vi phạm; đề bật khoá thì khoá bài", async ({ page }) => {
+  await updateRow("exams", examId, { lock_on_leave: true });
+  await startExam(page, "hs_bong_bong");
+  const native = (type: string) => page.evaluate(t => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: t } })), type);
+  const logs = () => page.evaluate("tracker.getLogs().map(l => l.type)") as Promise<string[]>;
+
+  // Bam vao bong bong chat (man hinh mat tieu diem) -> tinh roi bai -> khoa
+  await native("blur");
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldTitle")).toHaveText("BÀI THI ĐÃ BỊ KHOÁ");
+  expect(await logs()).toContain("MAT_TIEU_DIEM");
+  await native("focus");
+  await expect(page.locator("#shieldTitle")).toHaveText("BÀI THI ĐÃ BỊ KHOÁ"); // van khoa: can giam thi
+});
+
+test("app Android báo có cửa sổ nổi (đề không khoá): hiện màn che bảo tắt bong bóng chat, tắt xong quay lại làm tiếp", async ({ page }) => {
+  await startExam(page, "hs_cua_so_noi");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: "overlay" } })));
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldReason")).toContainText("bong bóng chat");
+  expect(await page.evaluate("tracker.getLogs().map(l => l.type)")).toContain("CUA_SO_NOI");
+  await page.locator("#btnShieldResume").click();
+  await expect(page.locator("#viewShield")).toBeHidden();
+});
+
+test("điện thoại: chạm giữ lâu ghi GIU_LAU (không tính vi phạm), không ghi \"Bấm chuột phải\"; chuột phải thật vẫn ghi CHUOT_PHAI", async ({ page }) => {
+  await startExam(page, "hs_cham_giu");
+  const fire = (pointerType: string) => page.evaluate(pt => {
+    const el = document.getElementById("questionText")!;
+    el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: pt }));
+    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  }, pointerType);
+  await fire("touch");
+  let types = await page.evaluate("tracker.getLogs().map(l => l.type)") as string[];
+  expect(types).toContain("GIU_LAU");
+  expect(types).not.toContain("CHUOT_PHAI");
+  await fire("mouse");
+  types = await page.evaluate("tracker.getLogs().map(l => l.type)") as string[];
+  expect(types).toContain("CHUOT_PHAI");
+});
+
+// Gia lap app Android (window.KioskBridge) tren 1 man hinh 1280px rong bang cua so
+async function androidPage(browser: Browser, apps = ""): Promise<Page> {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, screen: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(a => {
+    Object.assign(window, {
+      KioskBridge: {
+        startLock() { }, stopLock() { }, unlock() { }, isDeviceOwner: () => false, releaseDevice() { },
+        appVersion: () => "v1.3", accessibilityServices: () => a
+      }
+    });
+  }, apps);
+  return page;
+}
+
+test("bắt thêm trường hợp (app Android): chia đôi / thu nhỏ cửa sổ che bài", async ({ browser }) => {
+  const page = await androidPage(browser);
+  await loginStudent(page, "hs_chia_doi");
+  await page.getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  await expect(page.locator("#viewShield")).toBeHidden();
+  const logs = () => page.evaluate("tracker.getLogs().map(l => l.type)") as Promise<string[]>;
+
+  // Cua so hep di so voi man hinh (chia doi man hinh): che bai; lai rong nhu man hinh thi tu het che
+  // (Playwright doi ca screen khi doi viewport -> gia lap man hinh rong gap doi cua so)
+  const setScreenWidth = (w: number) => page.evaluate(sw => {
+    Object.defineProperty(window.screen, "width", { configurable: true, get: () => sw });
+    window.dispatchEvent(new Event("resize"));
+  }, w);
+  await setScreenWidth(2560);
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldReason")).toContainText("chia đôi / thu nhỏ");
+  expect(await logs()).toContain("CHIA_MAN_HINH");
+  await setScreenWidth(1280);
+  await expect(page.locator("#viewShield")).toBeHidden(); // het chia doi -> tu an man che
+
+  // App bao chia doi man hinh
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: "split" } })));
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: "split-off" } })));
+  await expect(page.locator("#viewShield")).toBeHidden();
+});
+
+test("bắt thêm trường hợp (máy tính): cửa sổ chưa phóng to không bị coi là chia đôi; PrintScreen, kéo thả, in trang được ghi lại", async ({ page }) => {
+  await startExam(page, "hs_truong_hop"); // man hinh gia lap 1920px, cua so 1280px
+  await expect(page.locator("#viewShield")).toBeHidden();
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "PrintScreen" }));
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    document.getElementById("questionText")!.dispatchEvent(drop);
+    window.dispatchEvent(new Event("beforeprint"));
+  });
+  const types = await page.evaluate("tracker.getLogs().map(l => l.type)") as string[];
+  for (const t of ["CHUP_MAN_HINH", "KEO_THA", "IN_TRANG"]) expect(types).toContain(t);
+  expect(types).not.toContain("CHIA_MAN_HINH");
+});
+
+test("app Android: ghi tên ứng dụng trợ năng đang bật khi bắt đầu làm bài (không tính vi phạm)", async ({ browser }) => {
+  const page = await androidPage(browser, "com.giai.bai.ai, com.tu.dong.bam");
+  await loginStudent(page, "hs_tro_nang");
+  await page.getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  const logs = await page.evaluate("tracker.getLogs()") as { type: string; detail: string }[];
+  const row = logs.find(l => l.type === "UNG_DUNG_TRO_NANG");
+  expect(row?.detail).toContain("com.giai.bai.ai, com.tu.dong.bam");
 });
 
 test("trả lời sai được chấm 0, đúng sai chấm theo thang THPT", async ({ page }) => {

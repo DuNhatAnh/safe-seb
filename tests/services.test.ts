@@ -12,6 +12,8 @@ import { ProctorCodeService } from "../lib/services/ProctorCodeService.ts";
 import { SebConfigService } from "../lib/services/SebConfigService.ts";
 import { EntryPasswordService } from "../lib/services/EntryPasswordService.ts";
 import { AppDownloadService } from "../lib/services/AppDownloadService.ts";
+import { VersionService } from "../lib/services/VersionService.ts";
+import { compareVersions, parseChangelog, requiredAppVersion } from "../lib/changelog.ts";
 import { bump, VERSION_PATTERN } from "../scripts/bump-version.ts";
 import { APP_VERSION } from "../lib/version.ts";
 import crypto from "node:crypto";
@@ -123,13 +125,32 @@ test("giám thị: sai mã ghi SAI_MAT_KHAU, sai 3 lần thì khoá kể cả nh
 
 test("mật khẩu đề: nhận mật khẩu chung hoặc mã riêng của đúng đề đó; mã của đề khác không dùng được", async () => {
   const { proctor } = setup();
-  const exit = (exam_id: number, password: string, student_name: string) =>
-    proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name, exam_id, password }, "ip");
-  assert.deepEqual(await exit(1, PASS, "a"), { ok: true });   // mat khau chung
-  assert.deepEqual(await exit(1, CODE, "b"), { ok: true });   // ma rieng cua de 1
-  assert.deepEqual(await exit(2, PASS, "c"), { ok: true });   // de chua co ma rieng: mat khau chung
-  await assert.rejects(exit(2, CODE, "d"), (e: AppError) => e.status === 401); // ma cua de 1 khong dung cho de 2
-  await assert.rejects(exit(1, "000000", "e"), (e: AppError) => e.status === 401);
+  const act = (type: string, exam_id: number, password: string, student_name: string) =>
+    proctor.authorizeExit({ type, student_name, exam_id, password }, "ip");
+  assert.deepEqual(await act("MO_KHOA", 1, PASS, "a"), { ok: true });   // mat khau chung
+  assert.deepEqual(await act("MO_KHOA", 1, CODE, "b"), { ok: true });   // ma rieng cua de 1
+  assert.deepEqual(await act("MO_KHOA", 2, PASS, "c"), { ok: true });   // de chua co ma rieng: mat khau chung
+  await assert.rejects(act("MO_KHOA", 2, CODE, "d"), (e: AppError) => e.status === 401); // ma cua de 1 khong dung cho de 2
+  await assert.rejects(act("MO_KHOA", 1, "000000", "e"), (e: AppError) => e.status === 401);
+  // Thoat khan cap luot 1..3: ca 2 mat khau
+  assert.deepEqual(await act("THOAT_KHAN_CAP", 1, CODE, "f"), { ok: true });
+  assert.deepEqual(await act("THOAT_KHAN_CAP", 1, PASS, "g"), { ok: true });
+});
+
+test("thoát khẩn cấp từ lần làm thứ 4: chỉ nhận mật khẩu mặc định (mã riêng của đề bị từ chối)", async () => {
+  const { submissions, proctor, db } = setup();
+  await db.update("exams", { id: 1 }, { allow_retake: true });
+  const exit = (password: string, ip: string) => proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password }, ip);
+  // Dang lam luot 3 (da nop 2): ma rieng van thoat duoc
+  for (let i = 0; i < 2; i++) await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
+  assert.deepEqual(await exit(CODE, "ip-1"), { ok: true });
+  // Dang lam luot 4 (da nop 3, giam thi cho lam lai): chi mat khau mac dinh
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
+  await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: CODE }, "ip-2");
+  await assert.rejects(exit(CODE, "ip-3"), (e: AppError) => e.status === 401);
+  assert.deepEqual(await exit(PASS, "ip-4"), { ok: true });
+  // Mo khoa van nhan ma rieng
+  assert.deepEqual(await proctor.authorizeExit({ type: "MO_KHOA", student_name: "hs", exam_id: 1, password: CODE }, "ip-5"), { ok: true });
 });
 
 test("làm lại (mặc định): hết lượt cần mật khẩu đề, mỗi lần nhập đúng thêm 1 lượt", async () => {
@@ -168,25 +189,40 @@ test("admin xem mật khẩu đề: mã riêng của đề + mật khẩu chung;
   assert.notEqual(fresh.code, CODE);
   assert.equal(fresh.common, PASS);
   assert.equal(examRow(1)?.proctor_code, fresh.code);
-  // Ma rieng cu het hieu luc, ma moi + mat khau chung dung duoc
-  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "a", exam_id: 1, password: CODE }, "ip"), (e: AppError) => e.status === 401);
-  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "b", exam_id: 1, password: fresh.code }, "ip"), { ok: true });
+  // Ma rieng cu het hieu luc, ma moi dung duoc (mo khoa)
+  await assert.rejects(proctor.authorizeExit({ type: "MO_KHOA", student_name: "a", exam_id: 1, password: CODE }, "ip"), (e: AppError) => e.status === 401);
+  assert.deepEqual(await proctor.authorizeExit({ type: "MO_KHOA", student_name: "b", exam_id: 1, password: fresh.code }, "ip"), { ok: true });
   const legacy = await codes.getCode(2);
   assert.match(legacy.code, /^\d{6}$/);
   assert.equal(examRow(2)?.proctor_code, legacy.code);
   await assert.rejects(codes.getCode(99), (e: AppError) => e.status === 404);
 });
 
-test("cho làm lại nhiều lần: đề bật thì làm lại không cần mật khẩu, không cần giám thị", async () => {
+test("cho làm lại (tối đa 3 lần): 3 lần đầu không cần mật khẩu; lần 4 trở đi giám thị nhập mật khẩu đề", async () => {
   const { submissions, examService, proctor, db } = setup();
   await db.update("exams", { id: 1 }, { allow_retake: true });
   for (let i = 0; i < 3; i++) {
+    // Con luot -> khong can (va khong duoc) nhap mat khau cho lam lai
+    await assert.rejects(proctor.grantRetake({ exam_id: 1, student_name: "hs", password: PASS }, "ip"), (e: AppError) => e.status === 409);
     await examService.getExamForStudent(1, "hs");
     await submissions.submit({ exam_id: 1, student_name: "hs", answers: i === 2 ? RIGHT : {} });
   }
   assert.equal((await submissions.history("hs")).total, 3);
-  // Con luot -> khong can (va khong duoc) nhap mat khau cho lam lai
-  await assert.rejects(proctor.grantRetake({ exam_id: 1, student_name: "hs", password: PASS }, "ip"), (e: AppError) => e.status === 409);
+  // Lan 4: het luot mien phi -> can giam thi
+  await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409 && e.extra.needsProctor === true);
+  await assert.rejects(submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT }), (e: AppError) => e.status === 409);
+  assert.deepEqual(await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: CODE }, "ip"), { ok: true, attempt: 4 });
+  await examService.getExamForStudent(1, "hs");
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT });
+  // Lan 5 lai can mat khau (moi lan nhap them 1 luot)
+  await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409);
+  assert.equal((await submissions.history("hs")).total, 4);
+});
+
+test("tắt \"cho làm lại\" sau khi đã làm nhiều lượt: giám thị vẫn mở được đúng 1 lượt", async () => {
+  const { submissions, examService, proctor, db } = setup();
+  await db.update("exams", { id: 1 }, { allow_retake: true });
+  for (let i = 0; i < 3; i++) await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
   // Tat lai -> ve mac dinh: het luot, phai nhap mat khau de
   await db.update("exams", { id: 1 }, { allow_retake: false });
   await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409 && e.extra.needsProctor === true);
@@ -548,7 +584,7 @@ test("cho làm lại xong: mật khẩu đề không tự đổi, cả 2 mật k
   await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: CODE }, "ip");
   assert.equal(examRow(1)?.proctor_code, CODE);
   assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: PASS }, "ip2"), { ok: true });
-  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: CODE }, "ip3"), { ok: true });
+  assert.deepEqual(await proctor.authorizeExit({ type: "MO_KHOA", student_name: "hs", exam_id: 1, password: CODE }, "ip3"), { ok: true });
 });
 
 test("lịch sử theo đề: chỉ các lần làm của đề đó", async () => {
@@ -628,4 +664,52 @@ test("giới hạn dò mật khẩu có cửa sổ thời gian: sai rải rác c
   // Nhap dung o noi khac (reset) -> het khoa
   lim.reset("ip");
   lim.assertNotLocked("ip");
+});
+
+test("lịch sử phiên bản: đọc CHANGELOG (ngày, thay đổi, bắt buộc cài lại app)", () => {
+  const md = [
+    "# Lịch sử", "", "## Quy tắc", "- abc", "", "---", "",
+    "## 1.3 · 2026-11-21", "", "- Bàn phím số", "- **App Android: cần gỡ app cũ, cài lại.**", "",
+    "## 1.2 · 2026-11-20", "", "- Mật khẩu đề", "- App Android **không** cần cài lại.", "",
+    "## 1.1", "", "- Lịch sử theo đề"
+  ].join("\n");
+  const e = parseChangelog(md);
+  assert.deepEqual(e.map(x => [x.version, x.date, x.requiresAppUpdate]), [["1.3", "2026-11-21", true], ["1.2", "2026-11-20", false], ["1.1", null, false]]);
+  assert.equal(e[0].notes, "- Bàn phím số\n- **App Android: cần gỡ app cũ, cài lại.**");
+});
+
+test("phiên bản app tối thiểu: so theo số (1.10 > 1.9), chỉ chặn khi file app mới đã build xong", () => {
+  assert.ok(compareVersions("1.10", "1.9") > 0);
+  assert.ok(compareVersions("v1.2", "1.3") < 0);
+  assert.equal(compareVersions("2.0", "2.0"), 0);
+  const req = ["1.1", "1.3", "1.5"];
+  assert.equal(requiredAppVersion(req, "1.4", "1.4"), "1.3");   // 1.5 chua phat hanh
+  assert.equal(requiredAppVersion(req, "1.3", "1.2"), "1.1");   // app 1.3 chua build xong -> chua chan theo 1.3
+  assert.equal(requiredAppVersion(req, "1.3", null), null);     // khong biet file app -> khong chan
+  assert.equal(requiredAppVersion([], "1.3", "1.3"), null);
+});
+
+test("VersionService: min_app_version từ bảng app_versions; lỗi database / GitHub thì không chặn; cache 1 phút", async () => {
+  let now = 0;
+  let apk: string | null = "1.3";
+  const db = new MemoryDatabase();
+  for (const [version, requires_app_update] of [["1.1", true], ["1.2", false], ["1.3", true]] as const) await db.insert("app_versions", { version, requires_app_update, notes: "" });
+  const svc = new VersionService({ db, latestApkVersion: async () => apk, version: "1.3", commit: () => "abc1234", now: () => now });
+  assert.deepEqual(await svc.info(), { version: "1.3", commit: "abc1234", min_app_version: "1.3" });
+  apk = null;
+  assert.equal((await svc.info()).min_app_version, "1.3"); // con trong cache
+  now += 61_000;
+  assert.equal((await svc.info()).min_app_version, null);   // khong biet file app -> khong chan
+  const broken = new VersionService({ db: { select: async () => { throw new Error("relation app_versions does not exist"); } } as never, latestApkVersion: async () => "1.3", version: "1.3" });
+  assert.equal((await broken.info()).min_app_version, null);
+});
+
+test("link tải app: đọc phiên bản từ tên file .apk mới nhất", async () => {
+  const fetchImpl = (async () => new Response(JSON.stringify({ assets: [
+    { name: "safe-exam-v1.3.apk", browser_download_url: "https://x/safe-exam-v1.3.apk", updated_at: "2026-11-21" },
+    { name: "safe-exam-v1.2.apk", browser_download_url: "https://x/safe-exam-v1.2.apk", updated_at: "2026-11-20" }
+  ] }))) as unknown as typeof fetch;
+  assert.equal(await new AppDownloadService({ repo: "chu/repo", fetchImpl }).latestVersion(), "1.3");
+  const down = (async () => new Response("", { status: 500 })) as unknown as typeof fetch;
+  assert.equal(await new AppDownloadService({ repo: "chu/repo", fetchImpl: down }).latestVersion(), null);
 });

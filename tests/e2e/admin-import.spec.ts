@@ -107,9 +107,9 @@ test("icon chìa khoá: xem mật khẩu riêng của đề + mật khẩu chung
   const retake = page.locator("#allowRetakeEnabled");
   await expect(retake).not.toBeChecked();
   await retake.check();
-  await expect(row).toContainText("Làm lại nhiều lần");
+  await expect(row).toContainText("Làm lại tối đa 3 lần");
   expect((await dbState()).exams[0].allow_retake).toBe(true);
   await retake.uncheck();
-  await expect(row).not.toContainText("Làm lại nhiều lần");
+  await expect(row).not.toContainText("Làm lại tối đa 3 lần");
   expect((await dbState()).exams[0].allow_retake).toBe(false);
 });

@@ -26,7 +26,8 @@ if (kind === "small" || kind === "big") {
   const changelog = fs.readFileSync(changelogFile, "utf8");
   const marker = "---\n\n";
   const at = changelog.indexOf(marker);
-  const entry = `## ${next}\n\n- (ghi thay đổi${kind === "big" ? " lớn" : ""} ở đây)\n\n`;
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = `## ${next} · ${today}\n\n- (ghi thay đổi${kind === "big" ? " lớn" : ""} ở đây)\n\n`;
   fs.writeFileSync(changelogFile, at >= 0 ? changelog.slice(0, at + marker.length) + entry + changelog.slice(at + marker.length) : changelog + "\n" + entry);
   console.log(`✔ ${current.trim()} → ${next} (cập nhật ${kind === "big" ? "lớn" : "nhỏ"}). Ghi thay đổi vào CHANGELOG.md mục ## ${next}.`);
 } else if (kind !== undefined) {

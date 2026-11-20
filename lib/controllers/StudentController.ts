@@ -6,7 +6,8 @@ import type { AppDownloadService } from "../services/AppDownloadService.ts";
 import type { SebConfigService } from "../services/SebConfigService.ts";
 import type { SubmissionService } from "../services/SubmissionService.ts";
 import { cleanString } from "../utils/input.ts";
-import { versionInfo } from "../version.ts";
+import { APP_VERSION } from "../version.ts";
+import type { VersionService } from "../services/VersionService.ts";
 
 export interface StudentControllerDeps {
   examService: ExamService;
@@ -14,6 +15,7 @@ export interface StudentControllerDeps {
   proctorService: ProctorService;
   sebConfigService: SebConfigService;
   appDownloadService?: AppDownloadService;
+  versionService?: VersionService;
 }
 
 export class StudentController {
@@ -22,8 +24,10 @@ export class StudentController {
   private readonly proctorService: ProctorService;
   private readonly sebConfigService: SebConfigService;
   private readonly appDownloadService?: AppDownloadService;
+  private readonly versionService?: VersionService;
 
-  constructor({ examService, submissionService, proctorService, sebConfigService, appDownloadService }: StudentControllerDeps) {
+  constructor({ examService, submissionService, proctorService, sebConfigService, appDownloadService, versionService }: StudentControllerDeps) {
+    this.versionService = versionService;
     this.appDownloadService = appDownloadService;
     this.sebConfigService = sebConfigService;
     this.examService = examService;
@@ -37,8 +41,10 @@ export class StudentController {
 
   register(router: Router): void {
     router
-      // Phien ban dang chay (hien o cuoi trang)
-      .get("version", () => versionInfo())
+      // Phien ban dang chay (hien o cuoi trang) + phien ban app Android toi thieu (app cu -> yeu cau tai ban moi)
+      .get("version", () => this.versionService
+        ? this.versionService.info()
+        : { version: APP_VERSION, commit: "dev", min_app_version: null })
       // Link tai app co dinh (/tai-app) -> file .apk moi nhat co ten kem phien ban
       .get("app-download", async () => RawResponse.redirect(
         this.appDownloadService ? await this.appDownloadService.latestUrl() : "https://github.com/DuNhatAnh/safe-seb/releases/download/apk-latest/safe-exam.apk"

@@ -8,7 +8,7 @@ import { acceptDialogs, loginAdmin } from "./support/helpers.ts";
 const VERSION = fs.readFileSync(path.join(PROJECT_ROOT, "VERSION"), "utf8").trim();
 
 test("trang đăng nhập / làm bài / admin hiện phiên bản", async ({ page, request }) => {
-  expect(await (await request.get("/api/version")).json()).toEqual({ version: VERSION, commit: "dev" });
+  expect(await (await request.get("/api/version")).json()).toEqual({ version: VERSION, commit: "dev", min_app_version: null });
   acceptDialogs(page);
   for (const url of ["/index.html", "/exam.html?user=hs_phien_ban"]) {
     await page.goto(url);

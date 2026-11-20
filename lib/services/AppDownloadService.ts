@@ -17,6 +17,7 @@ interface ReleaseAsset {
 
 const CACHE_MS = 5 * 60 * 1000;
 const VERSIONED_APK = /^safe-exam-v.+\.apk$/;
+const APK_VERSION = /safe-exam-v(\d+\.\d+)\.apk$/;
 
 export class AppDownloadService {
   readonly repo: string;
@@ -33,6 +34,11 @@ export class AppDownloadService {
   // Link file co ten kem phien ban dang dung (khong ten file nen ten co dinh cu)
   get fallbackUrl(): string {
     return `https://github.com/${this.repo}/releases/download/apk-latest/safe-exam.apk`;
+  }
+
+  // Phien ban cua file .apk moi nhat ("1.3"); khong biet (GitHub loi / file ten co dinh) -> null
+  async latestVersion(): Promise<string | null> {
+    return APK_VERSION.exec(await this.latestUrl())?.[1] ?? null;
   }
 
   async latestUrl(): Promise<string> {

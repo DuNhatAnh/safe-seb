@@ -48,9 +48,24 @@ object KioskManager {
         RESTRICTIONS.forEach { dpm.addUserRestriction(admin, it) }
     }
 
+    /**
+     * Device Owner: dang thi cam app khac tao cua so noi (bong bong chat, cua so tren cung...) - ca Android cu
+     * (setHideOverlayWindows chi co tu Android 12). Bat khi vao bai, tat khi ra.
+     */
+    private fun setBlockOverlays(context: Context, block: Boolean) {
+        if (!isDeviceOwner(context)) return
+        try {
+            if (block) dpm(context).addUserRestriction(admin(context), UserManager.DISALLOW_CREATE_WINDOWS)
+            else dpm(context).clearUserRestriction(admin(context), UserManager.DISALLOW_CREATE_WINDOWS)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     /** Vao che do khoa. Device Owner: khoa that, khong hoi. Khong phai: Android hoi "Ghim ung dung?". */
     fun startLock(activity: Activity) {
         prefs(activity).edit().putBoolean(KEY_ACTIVE, true).apply()
+        setBlockOverlays(activity, true)
         try {
             activity.startLockTask()
         } catch (e: Exception) {
@@ -61,6 +76,7 @@ object KioskManager {
     /** Ra khoi che do khoa (giam thi da nhap dung ma, server xac nhan). */
     fun stopLock(activity: Activity) {
         prefs(activity).edit().putBoolean(KEY_ACTIVE, false).apply()
+        setBlockOverlays(activity, false)
         try {
             activity.stopLockTask()
         } catch (e: Exception) {

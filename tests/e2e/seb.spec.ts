@@ -5,6 +5,8 @@ import { APP_URL, PROCTOR_PASSWORD } from "./support/env.ts";
 import { FULL_EXAM, FULL_EXAM_RIGHT } from "./support/fixtures.ts";
 import { acceptDialogs, answerCurrent, dbState, loginAdmin, loginStudent, resetDb, seed } from "./support/helpers.ts";
 
+// SEB that chay toan man hinh: cua so = man hinh
+const SEB_SCREEN = { viewport: { width: 1280, height: 720 }, screen: { width: 1280, height: 720 } };
 const SEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 SEB/3.7.1";
 
 let examId: number;
@@ -54,7 +56,7 @@ test("trình duyệt thường: đề bắt buộc SEB chỉ có nút mở bằn
 });
 
 test("trong SEB: làm bài được, không đòi toàn màn hình; giám thị cho thoát khẩn cấp → về danh sách đề (SEB không đóng)", async ({ browser }) => {
-  const page = await (await browser.newContext({ userAgent: SEB_UA })).newPage();
+  const page = await (await browser.newContext({ userAgent: SEB_UA, ...SEB_SCREEN })).newPage();
   await loginStudent(page, "hs_seb");
   await page.locator(".card", { hasText: FULL_EXAM.title }).getByRole("button", { name: "Vào làm bài" }).click();
   await expect(page.locator("#viewExamPlay")).toBeVisible();
@@ -70,7 +72,7 @@ test("trong SEB: làm bài được, không đòi toàn màn hình; giám thị 
 });
 
 test("trong SEB: nộp bài xong có thêm nút \"Thoát Safe Exam Browser\" (không cần mật khẩu) → SEB tự đóng", async ({ browser }) => {
-  const page = await (await browser.newContext({ userAgent: SEB_UA })).newPage();
+  const page = await (await browser.newContext({ userAgent: SEB_UA, ...SEB_SCREEN })).newPage();
   acceptDialogs(page);
   await loginStudent(page, "hs_seb_nop");
   await page.locator(".card", { hasText: FULL_EXAM.title }).getByRole("button", { name: "Vào làm bài" }).click();

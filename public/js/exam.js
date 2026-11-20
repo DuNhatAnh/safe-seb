@@ -33,7 +33,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // Lang nghe thao tac tra loi cho moi dang cau (phan tu co data-ans do registry sinh ra)
   const container = document.getElementById("optionsContainer");
+  // Ban phim so rieng: giu con tro trong o nhap (khong cuop focus), bam phim -> chen ky tu
+  container.addEventListener("mousedown", e => { if (e.target.closest("[data-key]")) e.preventDefault(); });
   container.addEventListener("click", e => {
+    const key = e.target.closest("[data-key]");
+    if (key) return pressKeypad(key.dataset.key);
     const el = e.target.closest("[data-ans]");
     if (el && el.tagName !== "INPUT") handleAnswer(el, true);
   });
@@ -476,6 +480,40 @@ function showInputError(input, message) {
 }
 
 // Luu o nhap dang go do (truoc khi chuyen cau / nop bai)
+// Ban phim so rieng (question-types.js numberKeypadHtml): chen / xoa ky tu tai con tro cua o dap an
+let keypadCommitTimer = null;
+function pressKeypad(k) {
+  const input = document.querySelector("#optionsContainer [data-ans=input]");
+  if (!input || input.disabled || isSubmitting || Lockdown.locked) return;
+  const v = input.value;
+  const focused = document.activeElement === input;
+  let start = focused && input.selectionStart !== null ? input.selectionStart : v.length;
+  const end = focused && input.selectionEnd !== null ? input.selectionEnd : v.length;
+  let next;
+  if (k === "clear") {
+    next = "";
+    start = 0;
+  } else if (k === "back") {
+    if (start === end && start > 0) start--;
+    next = v.slice(0, start) + v.slice(end);
+  } else {
+    const ch = k === "space" ? " " : k;
+    if (input.maxLength > 0 && v.length - (end - start) + 1 > input.maxLength) return; // het cho
+    next = v.slice(0, start) + ch + v.slice(end);
+    start += 1;
+  }
+  input.value = next;
+  if (focused) try { input.setSelectionRange(start, start); } catch (e) { }
+  clearTimeout(inputDebounceTimer);
+  handleAnswer(input, false);
+  // Ghi nhat ky 1 lan sau khi ngung bam (khong ghi tung phim); doi cau thi bo qua
+  const idx = currentQuestionIndex;
+  clearTimeout(keypadCommitTimer);
+  keypadCommitTimer = setTimeout(() => {
+    if (currentQuestionIndex === idx && document.contains(input)) handleAnswer(input, true);
+  }, 1200);
+}
+
 function flushPendingInput() {
   clearTimeout(inputDebounceTimer);
   const input = document.querySelector("#optionsContainer [data-ans=input]");
@@ -628,7 +666,7 @@ function backToList(showHistory = false) {
 const EXIT_DIALOG = {
   emergency: {
     title: "Thoát khẩn cấp",
-    text: "Chỉ giám thị được thực hiện: nhập mật khẩu đề. Bài làm được giữ lại, thời gian vẫn tiếp tục chạy. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
+    text: "Chỉ giám thị được thực hiện: nhập mật khẩu đề (từ lần làm thứ 4 trở đi phải dùng mật khẩu mặc định của admin). Bài làm được giữ lại, thời gian vẫn tiếp tục chạy. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
     button: "Xác nhận thoát"
   },
   entry: {

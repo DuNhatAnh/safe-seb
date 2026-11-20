@@ -56,6 +56,7 @@ Chỉ cần khi muốn chặn cả việc gỡ ghim. Không làm bước này th
 |---|---|
 | Học sinh thi | Mở app → đăng nhập → làm bài. Máy khoá suốt lúc app mở. |
 | Thoát khẩn cấp (đang làm bài) | Giám thị nhập **mật khẩu đề**: mật khẩu chung hoặc mật khẩu riêng của đề (admin xem ở nút chìa khoá). Thí sinh về danh sách đề, app bỏ ghim màn hình. |
+| Bong bóng chat / cửa sổ nổi của app khác (Messenger, Zalo...) | Android 12+: app tự ẩn mọi cửa sổ nổi khi đang mở (`setHideOverlayWindows`). Máy là Device Owner (mọi đời Android): trong lúc làm bài cấm app khác tạo cửa sổ nổi (`DISALLOW_CREATE_WINDOWS`), ra khỏi bài thì bỏ cấm. Android 8–11 cài thường: không ẩn được, nhưng **không cho làm bài khi còn bong bóng**: chạm vào bài thi lúc còn cửa sổ nổi trên màn hình (Android đánh dấu "bị che") → app không nhận chạm, trang hiện màn che "Tắt bong bóng chat...", ghi `CUA_SO_NOI`; bấm vào bong bóng (màn hình bài thi mất tiêu điểm) → ghi `MAT_TIEU_DIEM`, tính là rời bài (đề bật "Khoá bài khi rời trang" thì khoá). |
 | Sau khi nộp | Không có nút thoát: chỉ **Xem lịch sử làm bài** / **Về trang đề thi**; màn hình đã bỏ ghim. |
 | Thoát app khi chưa có ai thi | Màn đăng nhập › **Thoát ứng dụng (Quản trị)** › mật khẩu quản trị. |
 | Trả điện thoại về bình thường | Màn đăng nhập › **Gỡ khoá thiết bị** › mật khẩu quản trị. Muốn khoá lại thì làm lại bước 5. |

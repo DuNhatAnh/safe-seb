@@ -10,6 +10,7 @@ export interface DbState {
   exam_results: Row[];
   exam_events: Row[];
   app_settings: Row[];
+  app_versions: Row[];
 }
 
 // ------------------------------------------------------------ Du lieu (Supabase gia lap)

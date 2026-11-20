@@ -51,8 +51,9 @@ test("học sinh: nhập mật khẩu chung hoặc mật khẩu riêng của đ�
   await expect(page.locator("#viewExamPlay")).toBeVisible();
   await answerCurrent(page, FULL_EXAM_RIGHT[0]);
 
-  // Thoat khan cap (bang mat khau rieng cua de) -> ve danh sach de; vao lai khong hoi mat khau de nua (dung ve vao de)
+  // Thoat khan cap -> ve danh sach de; vao lai khong hoi mat khau de nua (dung ve vao de)
   await page.getByRole("button", { name: "Thoát khẩn cấp (Giám thị)" }).first().click();
+  // Lan lam dau: mat khau rieng cua de thoat duoc
   await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
   await page.locator("#btnConfirmExit").click();
   await expect(page.locator("#viewExamList")).toBeVisible();

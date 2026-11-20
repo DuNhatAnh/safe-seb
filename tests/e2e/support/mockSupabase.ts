@@ -11,7 +11,7 @@ export const SERVICE_KEY = "e2e-service-key";
 type Row = Record<string, unknown>;
 type Tables = Record<string, Row[]>;
 
-const TABLES = ["exams", "exam_results", "exam_events", "app_settings"] as const;
+const TABLES = ["exams", "exam_results", "exam_events", "app_settings", "app_versions"] as const;
 
 export function createMockSupabase(): http.Server {
   let tables: Tables = {};

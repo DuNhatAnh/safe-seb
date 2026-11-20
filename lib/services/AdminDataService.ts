@@ -1,11 +1,11 @@
 // Trang admin truy van truc tiep cac bang cua he thong (sau khi da xac thuc token).
-// Chi cho phep 4 bang; chan ".." va khoang trang de khong vuot ra ngoai /rest/v1/<bang>.
+// Chi cho phep cac bang cua he thong; chan ".." va khoang trang de khong vuot ra ngoai /rest/v1/<bang>.
 import type { RestGateway, RestMethod } from "../infra/database/Database.ts";
 import { ValidationError } from "../errors.ts";
 import { generateProctorCode, isProctorCode } from "../security/proctorCode.ts";
 import type { UntrustedBody } from "../types.ts";
 
-const ADMIN_TABLES = /^(exams|exam_results|exam_events|app_settings)(\?|$)/;
+const ADMIN_TABLES = /^(exams|exam_results|exam_events|app_settings|app_versions)(\?|$)/;
 const METHODS: readonly RestMethod[] = ["GET", "POST", "PATCH", "DELETE"];
 
 export interface AdminDataServiceDeps {

@@ -4,7 +4,7 @@
 //   - MemoryDatabase:   trong bo nho (test nghiep vu)
 // Doi sang database khac = viet them 1 lop cai dat interface nay, khong sua repository / service.
 
-export type TableName = "exams" | "exam_results" | "exam_events" | "app_settings";
+export type TableName = "exams" | "exam_results" | "exam_events" | "app_settings" | "app_versions";
 
 export type Scalar = string | number | boolean;
 

@@ -43,8 +43,22 @@ const Lockdown = {
     return !!(document.fullscreenElement || document.webkitFullscreenElement);
   },
 
+  // App Android bao: dang co cua so noi (bong bong chat...) / man hinh bai thi mat tieu diem
+  nativeOverlay: false,
+  nativeBlur: false,
+  nativeSplit: false,   // app bao dang chia doi man hinh
+  shrunk: false,        // cua so bai thi bi hep di nhieu (chia doi man hinh / thu nho cua so)
+  hiddenAt: 0,          // thoi diem roi bai (tinh so giay roi bai)
+  // Loai con tro cua lan cham / bam gan nhat: "touch" (dien thoai) / "mouse" / "pen"
+  lastPointer: "mouse",
+
   // state: { leaves, locked } khoi phuc tu ban nhap; onChange: luu lai khi doi
   start(tracker, { leaves = 0, locked = false, onChange = null, strict = false } = {}) {
+    this.nativeOverlay = false;
+    this.nativeBlur = false;
+    this.nativeSplit = false;
+    this.shrunk = this.isShrunk();
+    this.hiddenAt = 0;
     this.strict = !!strict;
     this.tracker = tracker;
     this.violations = (tracker.getLogs() || []).filter(l => VIOLATION_TYPES.includes(l.type)).length;
@@ -61,6 +75,7 @@ const Lockdown = {
 
     const env = this.env();
     this.log("MOI_TRUONG", `Môi trường thi: ${env === "SEB" ? "Safe Exam Browser" : env === "ANDROID_KIOSK" ? "Ứng dụng Android (Kiosk)" : "Trình duyệt web"}`, false);
+    this.logAccessibilityApps();
     this.enterFullscreen().then(() => this.check());
   },
 
@@ -142,7 +157,8 @@ const Lockdown = {
   check(reason) {
     if (!this.active) return;
     const fsOk = !this.needFullscreen() || this.isFullscreen();
-    const focusOk = !document.hidden && (document.hasFocus() || this.suspended());
+    const focusOk = !document.hidden && (document.hasFocus() || this.suspended()) && !this.nativeBlur && !this.nativeOverlay
+      && !this.nativeSplit && !this.shrunk;
     if (fsOk && focusOk) {
       this.wasOk = true;
       if (this.locked) this.showShield();
@@ -154,7 +170,10 @@ const Lockdown = {
       this.wasOk = false;
       this.recordLeave(!fsOk ? "thoát toàn màn hình" : "chuyển cửa sổ / tab");
     }
-    this.showShield(reason || (!fsOk ? "Bài thi yêu cầu chế độ toàn màn hình." : "Cửa sổ bài thi không còn được chọn."));
+    this.showShield(reason || (!fsOk ? "Bài thi yêu cầu chế độ toàn màn hình."
+      : this.nativeOverlay ? "Đang có bong bóng chat hoặc cửa sổ nổi của ứng dụng khác trên màn hình. Tắt nó đi rồi bấm \"Quay lại bài thi\"."
+        : this.nativeSplit || this.shrunk ? "Cửa sổ bài thi bị chia đôi / thu nhỏ. Mở bài thi toàn màn hình rồi bấm \"Quay lại bài thi\"."
+          : "Cửa sổ bài thi không còn được chọn."));
   },
 
   showShield(reason) {
@@ -183,6 +202,24 @@ const Lockdown = {
     el.style.display = "flex";
   },
 
+  // Cua so bai thi hep hon 70% chieu ngang man hinh: chia doi man hinh / cua so nho / mo app ben canh.
+  // Chi xet chieu ngang (ban phim dien thoai chi lam thap chieu cao). Chi ap dung khi KHONG bat buoc toan man hinh
+  // (app Android, SEB): trinh duyet may tinh da bat buoc toan man hinh, cua so chua phong to la chuyen binh thuong.
+  isShrunk() {
+    if (this.needFullscreen()) return false;
+    const sw = (window.screen && window.screen.width) || 0;
+    return sw > 0 && window.innerWidth > 0 && window.innerWidth < sw * 0.7;
+  },
+
+  // App Android: ghi ten cac ung dung tro nang dang bat (doc man hinh, tu bam, giai bai AI...) - khong tinh vi pham
+  logAccessibilityApps() {
+    try {
+      if (!window.KioskBridge || typeof window.KioskBridge.accessibilityServices !== "function") return;
+      const apps = String(window.KioskBridge.accessibilityServices() || "").trim();
+      if (apps) this.log("UNG_DUNG_TRO_NANG", `Điện thoại đang bật ứng dụng trợ năng (có thể đọc / điều khiển màn hình): ${apps}`, false);
+    } catch (e) { }
+  },
+
   hideShield() {
     const el = document.getElementById("viewShield");
     if (el) el.style.display = "none";
@@ -190,6 +227,8 @@ const Lockdown = {
 
   // Thi sinh bam "Quay lai bai thi" tren man che (thao tac nguoi dung -> duoc phep vao toan man hinh)
   async resume() {
+    // Con cua so noi thi lan cham tiep theo app lai bao -> man che hien lai
+    this.nativeOverlay = false;
     await this.enterFullscreen();
     window.focus();
     this.check();
@@ -225,10 +264,42 @@ const Lockdown = {
     };
 
     const onVisibility = () => {
-      if (document.hidden) this.log("ROI_MAN_HINH", "Rời khỏi tab hoặc chuyển ứng dụng khác");
-      else this.log("QUAY_LAI", "Quay lại màn hình bài thi", false);
+      if (document.hidden) {
+        this.hiddenAt = Date.now();
+        this.log("ROI_MAN_HINH", "Rời khỏi tab hoặc chuyển ứng dụng khác");
+      } else {
+        const secs = this.hiddenAt ? Math.round((Date.now() - this.hiddenAt) / 1000) : 0;
+        this.hiddenAt = 0;
+        this.log("QUAY_LAI", secs ? `Quay lại màn hình bài thi sau ${secs} giây` : "Quay lại màn hình bài thi", false);
+      }
       this.check();
     };
+
+    // Cua so bi chia doi / thu nho (web) - kiem tra lai moi khi doi kich thuoc
+    const onResize = () => {
+      const now = this.isShrunk();
+      if (now === this.shrunk) return;
+      this.shrunk = now;
+      if (now) this.log("CHIA_MAN_HINH", `Cửa sổ bài thi bị chia đôi / thu nhỏ (rộng ${window.innerWidth}px / màn hình ${window.screen.width}px)`);
+      this.check();
+    };
+
+    // In trang (menu trinh duyet) / phim chup man hinh tren may tinh (khong chan duoc he dieu hanh, chi ghi lai)
+    const onBeforePrint = () => this.log("IN_TRANG", "Mở in trang bài thi");
+    const onKeyUp = e => {
+      if (e.key === "PrintScreen") this.log("CHUP_MAN_HINH", "Bấm phím chụp màn hình (PrintScreen)");
+    };
+
+    // Keo tha chu / tep tu ngoai vao bai
+    const onDrop = e => {
+      e.preventDefault();
+      this.log("KEO_THA", "Kéo thả nội dung từ bên ngoài vào bài thi");
+    };
+    const onDragOver = e => e.preventDefault();
+
+    // Mang: khong phai vi pham, ghi de admin biet ly do nop cham
+    const onOffline = () => this.log("MAT_MANG", "Mất kết nối mạng", false);
+    const onOnline = () => this.log("CO_MANG", "Có mạng trở lại", false);
 
     const onBlur = e => {
       if (e.target !== window) return;
@@ -245,7 +316,40 @@ const Lockdown = {
 
     const onFocus = e => { if (e.target === window) this.check(); };
 
+    const onPointerDown = e => { this.lastPointer = e.pointerType || "mouse"; };
+
+    // Dien thoai: cham giu lau cung ban su kien "contextmenu" nhu chuot phai -> ghi rieng, khong tinh vi pham
+    const onContextMenu = e => {
+      if (isField(e.target)) return;
+      e.preventDefault();
+      const kind = e.pointerType || this.lastPointer;
+      if (kind === "touch" || kind === "pen") this.log("GIU_LAU", "Chạm giữ lâu trên màn hình (điện thoại / máy tính bảng)", false);
+      else this.log("CHUOT_PHAI", "Bấm chuột phải");
+    };
+
+    // App Android bao (MainActivity.notifyWeb)
+    const onNative = e => {
+      const type = e.detail && e.detail.type;
+      if (type === "overlay") {
+        this.nativeOverlay = true;
+        this.log("CUA_SO_NOI", "Có bong bóng chat / cửa sổ nổi của ứng dụng khác trên màn hình bài thi");
+      } else if (type === "blur") {
+        if (this.suspended()) return; // hop thoai cua chinh trang (vd: xac nhan nop bai)
+        this.nativeBlur = true;
+        this.log("MAT_TIEU_DIEM", "Màn hình bài thi mất tiêu điểm: bấm vào bong bóng chat / thanh thông báo / cửa sổ ứng dụng khác");
+      } else if (type === "focus") {
+        this.nativeBlur = false;
+      } else if (type === "split") {
+        this.nativeSplit = true;
+        this.log("CHIA_MAN_HINH", "Chia đôi màn hình / cửa sổ nhỏ trên điện thoại");
+      } else if (type === "split-off") {
+        this.nativeSplit = false;
+      } else return;
+      this.check();
+    };
+
     const onMouseOut = e => {
+      if (this.lastPointer !== "mouse") return; // man hinh cam ung: khong co chuot
       if (e.relatedTarget || e.toElement) return;
       this.log("CHUOT_RA_NGOAI", "Con trỏ chuột rời khỏi vùng bài thi (có thể dùng màn hình thứ 2)");
     };
@@ -280,13 +384,22 @@ const Lockdown = {
       [document, "visibilitychange", onVisibility],
       [window, "blur", onBlur],
       [window, "focus", onFocus],
+      [document, "pointerdown", onPointerDown],
+      [window, "safeexam-native", onNative],
       [document, "mouseout", onMouseOut],
-      [document, "contextmenu", prevent("CHUOT_PHAI", "Bấm chuột phải")],
+      [document, "contextmenu", onContextMenu],
       [document, "copy", prevent("SAO_CHEP", "Sao chép nội dung")],
       [document, "cut", prevent("SAO_CHEP", "Cắt nội dung")],
       [document, "paste", prevent("SAO_CHEP", "Dán nội dung từ bên ngoài")],
       [document, "selectstart", prevent(null)],
       [document, "dragstart", prevent(null)],
+      [document, "drop", onDrop],
+      [document, "dragover", onDragOver],
+      [window, "resize", onResize],
+      [window, "beforeprint", onBeforePrint],
+      [window, "keyup", onKeyUp],
+      [window, "offline", onOffline],
+      [window, "online", onOnline],
       [window, "beforeunload", onBeforeUnload],
       [window, "pagehide", onPageHide],
       [window, "popstate", onPopState]

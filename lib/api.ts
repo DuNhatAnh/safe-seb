@@ -22,6 +22,7 @@ import { EntryPasswordService } from "./services/EntryPasswordService.ts";
 import { ExamService } from "./services/ExamService.ts";
 import { GradingService } from "./services/GradingService.ts";
 import { ProctorCodeService } from "./services/ProctorCodeService.ts";
+import { VersionService } from "./services/VersionService.ts";
 import { ProctorService } from "./services/ProctorService.ts";
 import { SebConfigService } from "./services/SebConfigService.ts";
 import { SubmissionService } from "./services/SubmissionService.ts";
@@ -57,7 +58,8 @@ export function createApi({ config = new Config(), fetchImpl }: CreateApiOptions
 
   const router = new Router();
   const appDownloadService = new AppDownloadService({ repo: process.env.APP_RELEASE_REPO || undefined });
-  new StudentController({ examService, submissionService, proctorService, sebConfigService, appDownloadService }).register(router);
+  const versionService = new VersionService({ db, latestApkVersion: () => appDownloadService.latestVersion() });
+  new StudentController({ examService, submissionService, proctorService, sebConfigService, appDownloadService, versionService }).register(router);
   new AdminController({ authService, adminDataService, proctorCodeService, sebConfigService, entryPasswordService }).register(router);
   return router;
 }

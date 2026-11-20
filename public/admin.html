@@ -6,12 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quản trị - Safe Exam</title>
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="icon" type="image/svg+xml" href="img/logo.svg?v=2">
   <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
   <header class="app-header">
-    <div class="brand-title">Safe Exam - Bảng quản trị</div>
+    <div class="brand"><img class="brand-logo" decoding="async" src="img/logo.svg?v=2" alt="" width="28" height="28"><div class="brand-title">Safe Exam - Bảng quản trị</div></div>
     <button onclick="logoutAdmin()" class="btn btn-outline btn-sm">Đăng xuất</button>
   </header>
 
@@ -20,6 +21,7 @@
       <button class="sidebar-item active" data-page="pageCreate" onclick="showPage('pageCreate')">Tạo đề thi</button>
       <button class="sidebar-item" data-page="pageStructure" onclick="showPage('pageStructure')">Định dạng cấu trúc
         đề</button>
+      <button class="sidebar-item" data-page="pageVersions" onclick="showPage('pageVersions')">Phiên bản</button>
       <button class="sidebar-item" data-page="pageResults" onclick="showPage('pageResults')">Kết quả &amp; nhật
         ký</button>
     </nav>
@@ -151,6 +153,24 @@
       </section>
 
       <!-- TRANG 3: Ket qua & nhat ky -->
+      <section id="pageVersions" class="page" hidden>
+        <div class="card">
+          <h2 style="margin-bottom: 6px;">Lịch sử phiên bản</h2>
+          <p class="field-hint" style="margin-bottom: 14px;">Tự cập nhật mỗi lần deploy (lấy từ CHANGELOG.md). Phiên bản đánh dấu
+            <strong>"Bắt buộc cài lại app"</strong>: app Android cũ hơn bản đó bị chặn, học sinh phải gỡ app cũ và cài bản mới
+            (chỉ chặn khi file app mới đã build xong).</p>
+          <div id="versionCurrent" class="alert-box alert-info" style="margin-bottom: 14px;">Đang tải...</div>
+          <div class="table-responsive">
+            <table class="version-table">
+              <thead>
+                <tr><th>Phiên bản</th><th>Ngày</th><th>Thay đổi</th><th>App Android</th></tr>
+              </thead>
+              <tbody id="versionTableBody"><tr><td colspan="4">Đang tải...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="pageResults" class="page" hidden>
         <div class="card">
           <div class="preview-head">
@@ -349,9 +369,9 @@
   <!-- Modal: Chi tiet bai lam + cham tu luan -->
   <!-- Modal: Mat khau de (ma rieng cua de + mat khau chung) + cai dat lam bai cua de -->
   <div id="proctorCodeModal" class="overlay" style="display: none; z-index: 130;">
-    <div class="lock-screen" style="max-width: 380px;">
+    <div class="lock-screen" style="max-width: 380px; max-height: 92vh; overflow-y: auto;">
       <h3 id="proctorCodeTitle" style="margin-bottom: 6px;">Mật khẩu đề</h3>
-      <p class="field-hint" style="margin-bottom: 8px;">Mọi ô nhập mật khẩu (vào đề nếu bật bên dưới, cho làm lại, mở khoá bài, thoát khẩn cấp) nhận <strong>một trong hai</strong> mật khẩu dưới đây.</p>
+      <p class="field-hint" style="margin-bottom: 8px;">Vào đề (nếu bật bên dưới), cho làm lại, mở khoá bài, thoát khẩn cấp: nhận <strong>một trong hai</strong> mật khẩu dưới đây. Riêng <strong>thoát khẩn cấp từ lần làm thứ 4</strong> chỉ nhận mật khẩu chung (mặc định của admin).</p>
 
       <div style="text-align: left; font-weight: 600; margin-top: 4px;">Mật khẩu riêng của đề này</div>
       <div id="proctorCodeValue" class="proctor-code">······</div>
@@ -372,8 +392,8 @@
       <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; text-align: left;">
         <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
           <input type="checkbox" id="allowRetakeEnabled" onchange="toggleAllowRetake()" style="margin-top: 4px;">
-          <span><strong>Cho làm lại nhiều lần</strong><br>
-            <span class="field-hint">Tắt (mặc định): mỗi thí sinh làm 1 lần, muốn làm lại phải nhập mật khẩu đề. Bật: thí sinh tự bấm "Làm lại" bao nhiêu lần cũng được, không cần mật khẩu.</span></span>
+          <span><strong>Cho làm lại tối đa 3 lần</strong><br>
+            <span class="field-hint">Tắt (mặc định): mỗi thí sinh làm 1 lần, muốn làm lại phải nhập mật khẩu đề. Bật: thí sinh tự bấm "Làm lại", được làm tối đa 3 lần không cần mật khẩu; từ lần thứ 4 giám thị phải nhập mật khẩu đề (mỗi lần nhập thêm 1 lượt).</span></span>
         </label>
       </div>
 
@@ -391,7 +411,7 @@
         <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
           <input type="checkbox" id="entryPasswordEnabled" onchange="toggleEntryPassword()" style="margin-top: 4px;">
           <span><strong>Mật khẩu vào đề</strong><br>
-            <span class="field-hint">Bật: học sinh phải nhập mật khẩu đề ở trên mới bắt đầu làm được. <strong>Lưu ý:</strong> mật khẩu này cũng dùng được để cho làm lại, mở khoá bài và thoát khẩn cấp. Nên đọc to <em>mật khẩu riêng của đề</em> (không phải mật khẩu chung) để học sinh không dùng được ở đề khác.</span></span>
+            <span class="field-hint">Bật: học sinh phải nhập mật khẩu đề ở trên mới bắt đầu làm được. <strong>Lưu ý:</strong> mật khẩu đọc cho cả phòng cũng dùng được để cho làm lại và mở khoá bài. Nên đọc <em>mật khẩu riêng của đề</em> (không đọc mật khẩu chung): mật khẩu riêng chỉ dùng được ở đề này, và từ lần làm thứ 4 không dùng để thoát khẩn cấp được.</span></span>
         </label>
       </div>
     </div>

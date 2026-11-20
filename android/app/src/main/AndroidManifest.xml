@@ -6,12 +6,16 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Mo lai app khi may khoi dong lai giua gio thi (BootReceiver) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- An cua so noi cua app khac (bong bong chat Messenger...) de len app thi (Android 12+) -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
 
     <!-- usesCleartextTraffic: cho phep http:// trong mang noi bo (vd: may chu 192.168.x.x:3000).
          Dung tren Vercel (https://) thi khong can, nhung de bat cung khong anh huong. -->
     <application
         android:allowBackup="false"
         android:label="Safe Exam"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -21,6 +25,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="portrait"
+            android:resizeableActivity="false"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

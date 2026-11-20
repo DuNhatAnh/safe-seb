@@ -1,7 +1,8 @@
 // Quy tac luot lam bai:
 //  - Mac dinh: moi thi sinh duoc 1 luot / de. Het luot -> giam thi nhap mat khau de "cho lam lai"
 //    (su co CHO_LAM_LAI, ghi attempt = so lan da nop + 1) -> mo them DUNG 1 luot tinh tu so lan da nop.
-//  - De bat allow_retake: lam lai bao nhieu lan cung duoc, khong can mat khau.
+//  - De bat allow_retake: duoc lam toi da FREE_RETAKE_ATTEMPTS luot khong can mat khau; tu luot tiep theo
+//    giam thi nhap mat khau de (moi lan mo them 1 luot, nhu mac dinh).
 //  - Ve luot: luc cho vao de, server cap ve = HMAC(de, thi sinh, so lan da nop). Con ve hop le (chua nop them
 //    bai nao) thi luot dang lam van tai lai / nop duoc, du admin doi cai dat giua chung (vd tat allow_retake).
 //    Nop xong so lan da nop tang -> ve het han, nen khong dung ve de nop vo han duoc.
@@ -10,6 +11,9 @@ import type { EventStore } from "../repositories/EventRepository.ts";
 import type { ResultStore } from "../repositories/ResultRepository.ts";
 import { secureCompare } from "../security/secureCompare.ts";
 import type { ExamRow, ResultSummaryRow } from "../types.ts";
+
+// De bat "cho lam lai": so luot (tinh ca lan dau) duoc lam khong can mat khau
+export const FREE_RETAKE_ATTEMPTS = 3;
 
 export interface AttemptStatus {
   used: number;                         // so lan da nop
@@ -37,10 +41,6 @@ export class AttemptService {
   }
 
   async status(exam: Pick<ExamRow, "id" | "allow_retake">, studentName: string): Promise<AttemptStatus> {
-    if (exam.allow_retake) {
-      const submitted = await this.results.listByExamAndStudent(exam.id, studentName);
-      return { used: submitted.length, allowed: submitted.length + 1, canStart: true, latest: submitted[0] ?? null };
-    }
     const [submitted, grants] = await Promise.all([
       this.results.listByExamAndStudent(exam.id, studentName),
       this.events.retakeGrants(exam.id, studentName)
@@ -48,7 +48,8 @@ export class AttemptService {
     // Su co cu (attempt null): moi lan +1 luot. Su co moi: mo toi dung luot da ghi
     // (2 lan cho lam lai cung luc cung ghi 1 so luot -> chi mo 1 luot).
     const legacy = grants.filter(a => a === null).length;
-    const allowed = Math.max(1 + legacy, ...grants.map(a => a ?? 0));
+    const free = exam.allow_retake ? FREE_RETAKE_ATTEMPTS : 1;
+    const allowed = Math.max(free, 1 + legacy, ...grants.map(a => a ?? 0));
     return { used: submitted.length, allowed, canStart: submitted.length < allowed, latest: submitted[0] ?? null };
   }
 
