@@ -16,6 +16,7 @@ const Lockdown = {
   locked: false,       // bai dang bi khoa, can ma giam thi
   wasOk: false,        // dang o trong bai dung che do (de dem 1 lan roi bai chi 1 lan)
   onChange: null,      // goi khi leaves / locked doi (exam.js luu ban nhap)
+  strict: false,       // admin bat "Khoa bai khi roi trang": roi trang -> khoa, can ma giam thi
   tracker: null,
   violations: 0,
   suspendedUntil: 0,   // tam bo qua blur khi chinh trang mo hop thoai confirm/alert
@@ -43,7 +44,8 @@ const Lockdown = {
   },
 
   // state: { leaves, locked } khoi phuc tu ban nhap; onChange: luu lai khi doi
-  start(tracker, { leaves = 0, locked = false, onChange = null } = {}) {
+  start(tracker, { leaves = 0, locked = false, onChange = null, strict = false } = {}) {
+    this.strict = !!strict;
     this.tracker = tracker;
     this.violations = (tracker.getLogs() || []).filter(l => VIOLATION_TYPES.includes(l.type)).length;
     this.leaves = leaves;
@@ -81,7 +83,7 @@ const Lockdown = {
   // Ghi nhan 1 lan roi bai; qua FREE_LEAVES lan -> khoa bai
   recordLeave(how) {
     this.leaves++;
-    if (this.leaves > FREE_LEAVES && !this.locked) {
+    if (this.strict && this.leaves > FREE_LEAVES && !this.locked) {
       this.locked = true;
       this.log("KHOA_BAI", `Bài thi bị khoá: rời bài lần ${this.leaves} (${how}). Cần giám thị nhập mã để làm tiếp.`, false);
     }
@@ -166,9 +168,11 @@ const Lockdown = {
       : (reason || "Bạn đã rời bài thi.");
     document.getElementById("shieldCount").textContent = locked
       ? "Việc mở khoá được ghi vào nhật ký gửi về quản trị viên."
-      : left > 0
-        ? `Cảnh báo: còn ${left} lần rời bài trước khi bài bị KHOÁ. Đã ghi nhận ${this.leaves} lần rời bài.`
-        : "Trong lúc làm bài, nếu thoát toàn màn hình, chuyển cửa sổ / tab hoặc tải lại trang, bài sẽ bị KHOÁ NGAY và chỉ giám thị mở được.";
+      : !this.strict
+        ? (this.leaves ? `Đã ghi nhận ${this.leaves} lần rời bài thi. Giám thị sẽ thấy trong nhật ký.` : "Mỗi lần rời bài thi (thoát toàn màn hình, chuyển cửa sổ / tab) đều được ghi vào nhật ký.")
+        : left > 0
+          ? `Cảnh báo: còn ${left} lần rời bài trước khi bài bị KHOÁ. Đã ghi nhận ${this.leaves} lần rời bài.`
+          : "Trong lúc làm bài, nếu thoát toàn màn hình, chuyển cửa sổ / tab hoặc tải lại trang, bài sẽ bị KHOÁ NGAY và chỉ giám thị mở được.";
     document.getElementById("btnShieldResume").textContent = this.leaves ? "Quay lại bài thi" : "Vào làm bài (toàn màn hình)";
     document.getElementById("shieldLocked").style.display = locked ? "block" : "none";
     document.getElementById("btnShieldResume").style.display = locked ? "none" : "block";
@@ -228,6 +232,9 @@ const Lockdown = {
 
     const onBlur = e => {
       if (e.target !== window) return;
+      // App Android / SEB: he dieu hanh da khoa; blur o day thuong do hop thoai he thong (vd: "Ghim ung dung?")
+      // -> chi tinh khi trang bi an (visibilitychange), khong tinh blur
+      if (this.env() !== "WEB") return;
       // Doi 1 nhip: hop thoai cua chinh trang / chuyen focus vao iframe khong tinh
       setTimeout(() => {
         if (!this.active || this.suspended() || document.hasFocus()) return;

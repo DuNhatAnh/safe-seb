@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - "android/**"
+      - "VERSION"
       - ".github/workflows/android-apk.yml"
   workflow_dispatch: {}
 
@@ -31,16 +32,19 @@ jobs:
         with:
           gradle-version: "8.5"
 
+      # Phien ban = file VERSION; so ban build = so lan chay workflow (tu tang)
+      - name: Phien ban
+        id: ver
+        run: echo "name=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
       - name: Build APK
         working-directory: android
         env:
           SAFE_EXAM_URL: ${{ vars.SAFE_EXAM_URL }}
         run: |
-          if [ -n "$SAFE_EXAM_URL" ]; then
-            gradle assembleDebug --no-daemon -PsafeExamUrl="$SAFE_EXAM_URL"
-          else
-            gradle assembleDebug --no-daemon
-          fi
+          ARGS="-PappVersionCode=${{ github.run_number }}"
+          if [ -n "$SAFE_EXAM_URL" ]; then ARGS="$ARGS -PsafeExamUrl=$SAFE_EXAM_URL"; fi
+          gradle assembleDebug --no-daemon $ARGS
           cp app/build/outputs/apk/debug/app-debug.apk ../safe-exam.apk
 
       - uses: actions/upload-artifact@v4
@@ -52,8 +56,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: "Safe Exam - app Android (ban moi nhat)"
-          body: "Tai safe-exam.apk ve dien thoai Android, cai dat, mo app va bam Ghim khi duoc hoi."
+          name: "Safe Exam v${{ steps.ver.outputs.name }} (bản ${{ github.run_number }})"
+          body: |
+            Phiên bản ${{ steps.ver.outputs.name }} · bản build ${{ github.run_number }} · commit ${{ github.sha }}
+            Tải safe-exam.apk về điện thoại Android, cài đặt, mở app. Cuối trang đăng nhập hiện "App ${{ steps.ver.outputs.name }} (bản ${{ github.run_number }})".
+            Cài bản mới: gỡ app Safe Exam cũ trước rồi cài.
           files: safe-exam.apk
           overwrite_files: true
           make_latest: true

@@ -15,7 +15,13 @@ class KioskBridge(private val activity: Activity) {
         activity.runOnUiThread { KioskManager.startLock(activity) }
     }
 
-    /** exam.js goi sau khi server xac nhan ma giam thi (thoat khan cap / thoat ung dung). */
+    /** exam.js goi khi nop bai xong: bo ghim man hinh nhung van o lai app (xem ket qua, thoat khong can ma). */
+    @JavascriptInterface
+    fun unlock() {
+        activity.runOnUiThread { KioskManager.stopLock(activity) }
+    }
+
+    /** exam.js goi khi thoat: thoat khan cap (da xac nhan ma giam thi) hoac nut Thoat sau khi nop. */
     @JavascriptInterface
     fun stopLock() {
         activity.runOnUiThread {
@@ -23,6 +29,10 @@ class KioskBridge(private val activity: Activity) {
             activity.finish()
         }
     }
+
+    /** Phien ban app, hien o cuoi trang: "1 (bản 12)" = phien ban 1, lan build thu 12 tren GitHub. */
+    @JavascriptInterface
+    fun appVersion(): String = "${BuildConfig.VERSION_NAME} (bản ${BuildConfig.VERSION_CODE})"
 
     /** Trang dang nhap hien nut "Go khoa thiet bi" khi app dang la Device Owner. */
     @JavascriptInterface

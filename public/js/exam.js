@@ -15,6 +15,7 @@ let submittedByExam = {}; // { [examId]: lan nop gan nhat } -> lam lai can giam 
 let exitMode = null;      // "emergency" (dang lam bai) | "exit" (sau khi nop) | "retake" (cho lam lai)
 let dialogExamId = null;  // de dang xin lam lai / nhap mat khau vao de
 let currentEntryToken = null; // ve vao de (de co mat khau), gui kem khi nop bai
+let lastSebQuitUrl = null;    // nop bai trong SEB: trang thoat SEB (thoat khong can ma)
 let wrongPasswordCount = 0;
 
 // Khoi tao khi tai trang
@@ -122,77 +123,87 @@ function goToQuestion(index) {
   renderQuestion();
 }
 
-// 1. Lazy load: Lay danh sach de thi + lich su lam bai cua thi sinh
-async function loadAssignedExams() {
-  const container = document.getElementById("examListContainer");
-  try {
-    const [exams, results] = await Promise.all([
-      StudentApi.listExams(),
-      StudentApi.history(currentStudent).catch(err => {
-        console.warn("Khong tai duoc lich su lam bai:", err.message);
-        return null;
-      })
-    ]);
-    submittedByExam = {};
-    (results || []).forEach(r => { if (r.exam_id != null && !submittedByExam[r.exam_id]) submittedByExam[r.exam_id] = r; });
-    renderHistory(results, exams || []);
+// 1. Danh sach de + lich su lam bai: phan trang PHIA SERVER (3 muc / trang, moi nhat truoc),
+//    chi tai trang dang xem; tim de theo ten (gui len server sau khi ngung go 350ms)
+const PAGE_SIZE = 3;
+let examQuery = { q: "", page: 1 };
+let historyPage = 1;
+let examSearchTimer = null;
 
-    if (!exams || exams.length === 0) {
+function loadAssignedExams() {
+  return Promise.all([loadExamPage(examQuery.page), loadHistoryPage(historyPage)]);
+}
+
+function onExamSearch(value) {
+  clearTimeout(examSearchTimer);
+  examSearchTimer = setTimeout(() => {
+    examQuery = { q: value.trim(), page: 1 };
+    loadExamPage(1);
+  }, 350);
+}
+
+async function loadExamPage(page) {
+  examQuery.page = page;
+  const container = document.getElementById("examListContainer");
+  const pager = document.getElementById("examPager");
+  try {
+    const data = await StudentApi.listExams({ q: examQuery.q, page, size: PAGE_SIZE, student: currentStudent });
+    // Trang vuot qua cuoi (vd: vua xoa de) -> ve trang cuoi
+    if (!data.items.length && data.total && page > 1) return loadExamPage(Math.ceil(data.total / data.size));
+    data.items.forEach(e => { if (e.my_result) submittedByExam[e.id] = e.my_result; else delete submittedByExam[e.id]; });
+    pager.innerHTML = pagerHtml(data, "loadExamPage");
+    if (!data.items.length) {
       container.innerHTML = `
         <div class="card" style="text-align: center; padding: 24px;">
-          <p>Hiện tại chưa có đề thi nào trên hệ thống.</p>
-        </div>
-      `;
+          <p>${examQuery.q ? `Không có đề nào khớp "${escapeHtml(examQuery.q)}".` : "Hiện tại chưa có đề thi nào trên hệ thống."}</p>
+        </div>`;
       return;
     }
-
-    container.innerHTML = exams.map(exam => {
-      const done = submittedByExam[exam.id];
-      const draft = StorageHelper.getDraft(exam.id);
-      const inProgress = !done && draft && draft.deadline;
-      const expired = inProgress && draft.deadline <= Date.now();
-      let status = "";
-      let action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Vào làm bài</button>`;
-      if (exam.require_seb && !Seb.isActive()) {
-        // De bat buoc SEB, dang o trinh duyet thuong: chi cho mo bang SEB
-        status = `<span class="badge badge-amber">Bắt buộc Safe Exam Browser</span>`;
-        action = `<div style="text-align: right;">
-            <a class="btn btn-primary" href="${Seb.link(exam.id)}">Mở bằng Safe Exam Browser</a>
-            <div class="field-hint">Chưa cài? <a href="${Seb.DOWNLOAD_URL}" target="_blank" rel="noopener">Tải Safe Exam Browser</a></div>
-          </div>`;
-      } else if (done) {
-        status = `<span class="badge badge-green">Đã nộp · ${scoreText(done)}</span>`;
-        action = `<button class="btn btn-outline" onclick="startExam(${exam.id})">Làm lại</button>`;
-      } else if (expired) {
-        status = `<span class="badge badge-red">Đã hết giờ, chưa nộp</span>`;
-        action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Nộp bài</button>`;
-      } else if (inProgress) {
-        status = `<span class="badge badge-amber">Đang làm dở</span>`;
-        action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Tiếp tục làm bài</button>`;
-      }
-      if (exam.require_password && !done) status += ` <span class="badge badge-blue">Cần mật khẩu</span>`;
-      return `
-        <div class="card" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px;">
-          <div>
-            <h3 style="font-size: 1.05rem;">${escapeHtml(exam.title)}</h3>
-            <p style="font-size: 0.85rem; margin-top: 4px; color: var(--text-muted);">Thời gian: ${exam.duration_minutes} phút ${status}</p>
-          </div>
-          ${action}
-        </div>`;
-    }).join("");
+    container.innerHTML = data.items.map(examCardHtml).join("");
   } catch (err) {
     console.error("Lỗi khi tải danh sách đề thi:", err);
     // Co ma loi = server da tra loi (vd: chua cau hinh) -> hien dung loi; khong co = mat mang
     const reason = err.status
       ? `Máy chủ báo lỗi: ${escapeHtml(err.message)}`
       : "Không kết nối được máy chủ. Vui lòng kiểm tra kết nối mạng.";
-    container.innerHTML = `
-      <div class="card alert-box alert-danger">
-        Không thể tải danh sách đề thi. ${reason}
-      </div>
-    `;
-    document.getElementById("historyContainer").innerHTML = '<p class="field-hint">Không tải được lịch sử làm bài.</p>';
+    pager.innerHTML = "";
+    container.innerHTML = `<div class="card alert-box alert-danger">Không thể tải danh sách đề thi. ${reason}</div>`;
   }
+}
+
+function examCardHtml(exam) {
+  const done = exam.my_result;
+  const draft = StorageHelper.getDraft(exam.id);
+  const inProgress = !done && draft && draft.deadline;
+  const expired = inProgress && draft.deadline <= Date.now();
+  let status = "";
+  let action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Vào làm bài</button>`;
+  if (exam.require_seb && !Seb.isActive()) {
+    // De bat buoc SEB, dang o trinh duyet thuong: chi cho mo bang SEB
+    status = `<span class="badge badge-amber">Bắt buộc Safe Exam Browser</span>`;
+    action = `<div class="exam-card-action">
+        <a class="btn btn-primary" href="${Seb.link(exam.id)}">Mở bằng Safe Exam Browser</a>
+        <div class="field-hint">Chưa cài? <a href="${Seb.DOWNLOAD_URL}" target="_blank" rel="noopener">Tải Safe Exam Browser</a></div>
+      </div>`;
+  } else if (done) {
+    status = `<span class="badge badge-green">Đã nộp · ${scoreText(done)}</span>`;
+    action = `<button class="btn btn-outline" onclick="startExam(${exam.id})">Làm lại</button>`;
+  } else if (expired) {
+    status = `<span class="badge badge-red">Đã hết giờ, chưa nộp</span>`;
+    action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Nộp bài</button>`;
+  } else if (inProgress) {
+    status = `<span class="badge badge-amber">Đang làm dở</span>`;
+    action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Tiếp tục làm bài</button>`;
+  }
+  if (exam.require_password && !done) status += ` <span class="badge badge-blue">Cần mật khẩu</span>`;
+  return `
+    <div class="card exam-card">
+      <div class="exam-card-info">
+        <h3 class="exam-card-title">${escapeHtml(exam.title)}</h3>
+        <p class="exam-card-meta">Mã đề ${exam.id} · ${exam.duration_minutes} phút ${status}</p>
+      </div>
+      ${action}
+    </div>`;
 }
 
 // Diem hien thi: con cau giao vien cham -> ghi chu "cho cham"
@@ -201,25 +212,33 @@ function scoreText(r) {
   return pending ? `${fmtNum(Number(r.score))}/10 (chờ chấm ${pending} câu)` : `${fmtNum(Number(r.score))}/10`;
 }
 
-function renderHistory(results, exams) {
+async function loadHistoryPage(page) {
+  historyPage = page;
   const box = document.getElementById("historyContainer");
-  if (results === null) {
+  const pager = document.getElementById("historyPager");
+  let data;
+  try {
+    data = await StudentApi.history(currentStudent, page, PAGE_SIZE);
+  } catch (err) {
+    console.warn("Khong tai duoc lich su lam bai:", err.message);
+    pager.innerHTML = "";
     box.innerHTML = '<p class="field-hint">Không tải được lịch sử làm bài.</p>';
     return;
   }
-  if (!results.length) {
+  if (!data.items.length && data.total && page > 1) return loadHistoryPage(Math.ceil(data.total / data.size));
+  pager.innerHTML = pagerHtml(data, "loadHistoryPage");
+  if (!data.items.length) {
     box.innerHTML = '<p class="field-hint">Bạn chưa nộp bài thi nào.</p>';
     return;
   }
-  const titles = Object.fromEntries(exams.map(e => [e.id, e.title]));
   box.innerHTML = `
     <div class="table-responsive">
-      <table>
+      <table class="wrap-table">
         <thead><tr><th>Đề thi</th><th>Điểm</th><th>Thời lượng</th><th>Nộp lúc</th></tr></thead>
         <tbody>
-          ${results.map(r => `
+          ${data.items.map(r => `
             <tr>
-              <td>${escapeHtml(titles[r.exam_id] || (r.exam_id ? `Đề #${r.exam_id} (đã xoá)` : "--"))}</td>
+              <td>${escapeHtml(r.exam_title || (r.exam_id ? `Đề #${r.exam_id} (đã xoá)` : "--"))}</td>
               <td><strong>${scoreText(r)}</strong></td>
               <td>${r.duration_minutes || "--"} phút</td>
               <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleString("vi-VN") : "--"}</td>
@@ -279,7 +298,9 @@ async function startExam(examId) {
     document.getElementById("btnSubmit").textContent = "Nộp bài thi";
     // Khoi phuc so lan roi bai + trang thai khoa (tai lai trang khong go duoc khoa)
     const lock = resume && draft.lock ? draft.lock : {};
-    Lockdown.start(tracker, { leaves: lock.leaves || 0, locked: !!lock.locked, onChange: saveDraftNow });
+    // strict = admin bat "Khoa bai khi roi trang" cho de nay (mac dinh tat: roi trang chi canh bao + ghi log)
+    const strict = !!examDetail.lock_on_leave;
+    Lockdown.start(tracker, { leaves: lock.leaves || 0, locked: strict && !!lock.locked, onChange: saveDraftNow, strict });
     saveDraftNow();
 
     // Khoi dong dong ho dem nguoc
@@ -487,6 +508,9 @@ async function doSubmitExam() {
   tracker.stop();
   Lockdown.stop();
   document.getElementById("timerDisplay").style.display = "none";
+  // Nop xong: bo ghim man hinh (app Android) -> hoc sinh tu thoat duoc, khong can ma giam thi
+  lastSebQuitUrl = result.seb_quit_url || null;
+  if (window.KioskBridge && typeof window.KioskBridge.unlock === "function") window.KioskBridge.unlock();
 
   const minutes = result.duration_minutes || durationSpent;
   if (result.pending) {
@@ -501,7 +525,22 @@ async function doSubmitExam() {
   document.getElementById("viewLockScreen").style.display = "flex";
 }
 
-// 3. Sau khi nop: xem lich su (khong can mat khau, thiet bi van khoa Kiosk)
+// 3. Sau khi nop: thoat KHONG can mat khau (ma giam thi chi can khi thoat giua chung)
+//    App Android: dong app. Safe Exam Browser: mo trang thoat cua de -> SEB tu dong. Trinh duyet: ve dang nhap.
+function exitAfterSubmit() {
+  if (lastSebQuitUrl) {
+    window.location.href = lastSebQuitUrl;
+    return;
+  }
+  if (window.KioskBridge && typeof window.KioskBridge.stopLock === "function") {
+    window.KioskBridge.stopLock();
+    return;
+  }
+  Lockdown.exitFullscreen();
+  window.location.href = "index.html";
+}
+
+// Sau khi nop: xem lich su
 function backToList() {
   currentExam = null;
   document.getElementById("viewLockScreen").style.display = "none";

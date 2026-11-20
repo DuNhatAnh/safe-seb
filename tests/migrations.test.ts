@@ -44,7 +44,7 @@ test("database trống: áp đủ migration, chạy lại không áp trùng", as
 
   const first = await runner.migrate();
   assert.equal(first.length, MIGRATIONS.length);
-  assert.deepEqual(await columns(sql, "exams"), ["assigned_to", "created_at", "duration_minutes", "entry_password", "id", "proctor_code", "questions", "require_password", "require_seb", "seb_quit_password", "title"]);
+  assert.deepEqual(await columns(sql, "exams"), ["assigned_to", "created_at", "duration_minutes", "entry_password", "id", "lock_on_leave", "proctor_code", "questions", "require_password", "require_seb", "seb_quit_password", "title"]);
   assert.ok((await columns(sql, "exam_results")).includes("action_logs"));
   assert.ok((await columns(sql, "exam_events")).includes("type"));
   assert.deepEqual(await columns(sql, "app_settings"), ["key", "value"]);

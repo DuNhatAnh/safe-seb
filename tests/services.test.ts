@@ -143,7 +143,7 @@ test("làm lại: hết lượt cần mã giám thị, mỗi lần nhập đúng
   const second = await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT });
   assert.equal(second.earned, 4);
   const history = await submissions.history("hs");
-  assert.equal(history.length, 2);
+  assert.equal(history.total, 2);
 
   // Lan 3 lai can ma
   await assert.rejects(submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT }), (e: AppError) => e.status === 409);
@@ -179,7 +179,7 @@ test("admin: token đúng qua, token sửa / hết hạn bị chặn", () => {
 test("proxy admin chỉ cho 4 bảng hệ thống", async () => {
   const calls: [string, string | undefined][] = [];
   const rest = async (p: string, o: { method?: string } = {}) => { calls.push([p, o.method]); return null; };
-  const svc = new AdminDataService({ db: { rest: rest as never }, generateCode: () => "424242" });
+  const svc = new AdminDataService({ db: { rest: rest as never, restWithCount: (async () => ({ rows: [], total: 0 })) as never }, generateCode: () => "424242" });
   await svc.query({ method: "PATCH", path: "exam_results?id=eq.1", body: {} });
   for (const path of ["../auth/v1/users", "pg_secrets?select=*", "exams?select=* ", "examsx"]) {
     assert.throws(() => svc.query({ method: "GET", path }), (e: AppError) => e.status === 400);
@@ -191,7 +191,7 @@ test("proxy admin chỉ cho 4 bảng hệ thống", async () => {
 test("xuất bản đề mới: server tự gắn mã giám thị, trình duyệt không tự đặt được mã yếu", async () => {
   const bodies: unknown[] = [];
   const rest = async (_p: string, o: { body?: unknown } = {}) => { bodies.push(o.body); return null; };
-  const svc = new AdminDataService({ db: { rest: rest as never }, generateCode: () => "424242" });
+  const svc = new AdminDataService({ db: { rest: rest as never, restWithCount: (async () => ({ rows: [], total: 0 })) as never }, generateCode: () => "424242" });
   await svc.query({ method: "POST", path: "exams", body: { title: "A", questions: [] } });
   await svc.query({ method: "POST", path: "exams", body: { title: "B", proctor_code: "1" } });
   await svc.query({ method: "PATCH", path: "exams?id=eq.1", body: { title: "C" } });
@@ -383,4 +383,52 @@ test("mật khẩu vào đề: nộp bài phải kèm vé hợp lệ; tắt đi 
   assert.equal((await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, entry_token })).earned, 4);
   await entry.settings(1, { enabled: false });
   assert.equal((await submissions.submit({ exam_id: 1, student_name: "hs2", answers: {} })).earned, 0);
+});
+
+// ------------------------------------------------------------ Phan trang
+test("danh sách đề: 3 đề / trang, mới nhất trước, tìm theo tên, kèm lần nộp của thí sinh", async () => {
+  const db = new MemoryDatabase({ exams: ["Toán 10", "Toán 11 giữa kì", "Lý 11", "Toán 12", "Hoá 11"].map((title, i) => ({ id: 10001 + i, title, questions: [] })) });
+  const results = new ResultRepository(db);
+  const exams = new ExamRepository(db);
+  const examService = new ExamService({ exams, attempts: new AttemptService({ results, events: new EventRepository(db) }), grading, results });
+  await results.create({ exam_id: 10004, student_name: "an", score: 7.5, total_questions: 1, duration_minutes: 1, answers: [], submitted_at: "2026-11-20T01:00:00Z" });
+
+  const p1 = await examService.listExams({ student: "an" });
+  assert.deepEqual(p1.items.map(e => e.title), ["Hoá 11", "Toán 12", "Lý 11"]); // moi tao truoc
+  assert.deepEqual([p1.total, p1.page, p1.size], [5, 1, 3]);
+  assert.equal(p1.items[1].my_result?.score, 7.5);
+  assert.equal(p1.items[0].my_result, undefined);
+
+  const p2 = await examService.listExams({ page: 2 });
+  assert.deepEqual(p2.items.map(e => e.title), ["Toán 11 giữa kì", "Toán 10"]);
+
+  const found = await examService.listExams({ q: "toán 1" });
+  assert.deepEqual([found.total, found.items.map(e => e.title)], [3, ["Toán 12", "Toán 11 giữa kì", "Toán 10"]]);
+  assert.equal((await examService.listExams({ size: 999 })).size, 50); // gioi han kich thuoc trang
+});
+
+test("lịch sử làm bài: 3 bài / trang, mới nhất trước, chỉ của thí sinh đó", async () => {
+  const { submissions, db } = setup();
+  for (let i = 0; i < 5; i++) await db.insert("exam_results", { exam_id: 1, student_name: "an", score: i, answers: [], submitted_at: null });
+  await db.insert("exam_results", { exam_id: 1, student_name: "binh", score: 9, answers: [], submitted_at: null });
+  const p1 = await submissions.history("an");
+  assert.deepEqual([p1.total, p1.items.map(r => r.score)], [5, [4, 3, 2]]);
+  assert.deepEqual((await submissions.history("an", 2)).items.map(r => r.score), [1, 0]);
+});
+
+test("SupabaseDatabase: phân trang, đếm, tìm kiếm, lọc IN / khoảng thời gian", async () => {
+  const urls: string[] = [];
+  const fakeFetch = (async (url: string, init: RequestInit) => {
+    urls.push(`${init.method} ${decodeURIComponent(url.replace("https://x.supabase.co/rest/v1/", ""))} ${(init.headers as Record<string, string>).Prefer ?? ""}`.trim());
+    return new Response("[]", { status: 200, headers: { "Content-Range": "0-2/57" } });
+  }) as unknown as typeof fetch;
+  const db = new SupabaseDatabase(new Config({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "k" }), fakeFetch);
+  await db.select("exams", { columns: ["id"], search: { column: "title", term: "toán*11" }, orderBy: { column: "created_at", ascending: false }, offset: 6, limit: 3 });
+  assert.equal(await db.count("exam_results", { filter: { student_name: "an", exam_id: [1, 2], submitted_at: { gte: "2026-11-20", lt: "2026-11-21" } } }), 57);
+  await db.select("exam_results", { filter: { student_name: ['A "B"', "C,D"] } });
+  assert.deepEqual(urls, [
+    "GET exams?title=ilike.*toán 11*&select=id&order=created_at.desc&limit=3&offset=6",
+    "GET exam_results?student_name=eq.an&exam_id=in.(1,2)&submitted_at=gte.2026-11-20&submitted_at=lt.2026-11-21&select=id count=exact",
+    'GET exam_results?student_name=in.("A \\"B\\"","C,D")&select=*'
+  ]);
 });

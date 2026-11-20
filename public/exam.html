@@ -25,13 +25,16 @@
         <h2>Danh sách đề thi</h2>
         <p>Chọn đề thi bên dưới để bắt đầu làm bài.</p>
       </div>
+      <input type="search" id="examSearch" class="form-control" placeholder="Tìm đề theo tên..." oninput="onExamSearch(this.value)" style="margin-bottom: 12px;">
       <div id="examListContainer">
         <p style="text-align: center; padding: 20px;">Đang tải danh sách đề thi...</p>
       </div>
+      <div id="examPager"></div>
 
       <div id="historySection" class="card" style="margin-top: 20px;">
         <h3 style="margin-bottom: 10px;">Lịch sử làm bài</h3>
         <div id="historyContainer"><p class="field-hint">Đang tải...</p></div>
+        <div id="historyPager"></div>
       </div>
     </div>
 
@@ -76,11 +79,11 @@
       <p id="finalSummary" style="font-size: 0.95rem; margin-bottom: 16px;">Đúng: -- / -- câu</p>
       
       <div class="alert-box alert-info" style="text-align: left; margin-bottom: 24px;">
-        Thiết bị vẫn ở chế độ phòng thi. Bạn có thể xem lịch sử làm bài; muốn thoát ứng dụng cần giám thị nhập mật khẩu.
+        Bài đã được lưu. Bạn có thể xem lịch sử làm bài hoặc thoát.
       </div>
 
       <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="backToList()">Xem lịch sử làm bài</button>
-      <button class="btn btn-outline btn-block" style="font-size: 0.85rem;" onclick="showExitDialog('exit')">Thoát ứng dụng (Giám thị)</button>
+      <button id="btnExitAfterSubmit" class="btn btn-outline btn-block" onclick="exitAfterSubmit()">Thoát</button>
     </div>
   </div>
 
@@ -129,5 +132,7 @@
   <script src="js/question-types.js"></script>
   <script src="js/lockdown.js"></script>
   <script src="js/exam.js"></script>
+  <div class="app-version"></div>
+  <script src="js/version.js"></script>
 </body>
 </html>

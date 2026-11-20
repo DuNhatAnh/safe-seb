@@ -1,6 +1,6 @@
 // Dieu phoi UI admin. Logic dang cau + cau truc de nam o question-types.js.
 let parsedQuestions = [];   // Cau hoi phang (co part, points), chi giu trong bo nho
-let allResultsData = [];
+let allResultsData = [];    // ket qua cua TRANG dang xem (phan trang phia server)
 let templates = clone(DEFAULT_TEMPLATES);
 let editingTplId = null;    // mau dang sua o trang cau truc
 let editing = null;         // { index | null, part } cau dang sua trong modal
@@ -9,7 +9,11 @@ let customRules = {};       // { [templateId]: quy tac dinh dang da chinh sua }
 let rulesTplId = null;      // mau dang mo trong modal quy tac
 let detailIndex = null;    // ket qua dang xem
 let detailExam = null;      // de thi cua ket qua dang xem (de hien noi dung cau tu luan)
-let allEvents = [];         // su co phong thi (bang exam_events)
+let allEvents = [];         // su co phong thi cua trang dang xem
+const ADMIN_EXAM_PAGE = 10, RESULT_PAGE = 20, EVENT_PAGE = 10;
+let adminExamState = { q: "", page: 1 };
+let resultPage = 1, eventPage = 1;
+let adminSearchTimer = null, resultFilterTimer = null;
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
 
@@ -578,12 +582,16 @@ function updateEditModeUi() {
   document.getElementById("examEditorHeading").textContent = on ? `Sửa đề thi #${editingExamId}` : "Tạo đề thi mới";
   document.getElementById("btnCancelEdit").style.display = on ? "inline-flex" : "none";
   document.getElementById("btnCancelImport").style.display = on ? "none" : "";
-  const submitted = on ? allResultsData.filter(r => r.exam_id === editingExamId).length : 0;
   const note = document.getElementById("editExamNote");
   note.style.display = on ? "block" : "none";
-  note.textContent = !on ? "" : submitted
-    ? `Đề này đã có ${submitted} bài nộp. Điểm các bài cũ không được chấm lại; thêm / xoá / đổi thứ tự câu có thể làm lệch phần xem lại bài cũ.`
-    : "Đang sửa đề đã xuất bản. Bấm \"Lưu thay đổi\" để cập nhật cho thí sinh.";
+  note.textContent = on ? "Đang sửa đề đã xuất bản. Bấm \"Lưu thay đổi\" để cập nhật cho thí sinh." : "";
+  if (!on) return;
+  const examId = editingExamId;
+  supabasePage(`exam_results?select=id&exam_id=eq.${examId}&limit=1`).then(({ total }) => {
+    if (editingExamId === examId && total) {
+      note.textContent = `Đề này đã có ${total} bài nộp. Điểm các bài cũ không được chấm lại; thêm / xoá / đổi thứ tự câu có thể làm lệch phần xem lại bài cũ.`;
+    }
+  }).catch(() => { });
 }
 
 // =================================================== XEM TRUOC THEO PHAN
@@ -668,15 +676,27 @@ async function saveExam() {
   }
 }
 
-async function loadExistingExams() {
+function onAdminExamSearch(value) {
+  clearTimeout(adminSearchTimer);
+  adminSearchTimer = setTimeout(() => { adminExamState = { q: value.trim(), page: 1 }; loadExistingExams(1); }, 350);
+}
+
+// Danh sach de da tao: phan trang phia server (moi tao truoc), tim theo ten
+async function loadExistingExams(page = adminExamState.page) {
+  adminExamState.page = page;
   const tbody = document.getElementById("examTableBody");
+  const pager = document.getElementById("adminExamPager");
   try {
-    const exams = await ExamService.getAllExams();
+    const search = adminExamState.q ? `&title=ilike.${pgValue(`*${adminExamState.q.replace(/[*%,()"]/g, " ")}*`)}` : "";
+    const { rows: exams, total } = await supabasePage(
+      `exams?select=id,title,duration_minutes,assigned_to,require_seb,require_password,lock_on_leave,created_at&order=created_at.desc${search}&limit=${ADMIN_EXAM_PAGE}&offset=${(page - 1) * ADMIN_EXAM_PAGE}`);
+    if (!exams.length && total && page > 1) return loadExistingExams(Math.ceil(total / ADMIN_EXAM_PAGE));
+    pager.innerHTML = pagerHtml({ page, size: ADMIN_EXAM_PAGE, total }, "loadExistingExams");
     tbody.innerHTML = exams && exams.length
       ? exams.map(ex => `
         <tr class="${ex.id === editingExamId ? "editing-exam" : ""}">
           <td>#${ex.id}</td>
-          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}</td>
+          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}${ex.lock_on_leave ? ' <span class="badge badge-red">Khoá khi rời trang</span>' : ""}</td>
           <td>${ex.duration_minutes} phút</td>
           <td>${ex.created_at ? new Date(ex.created_at).toLocaleDateString("vi-VN") : "--"}</td>
           <td class="nowrap">
@@ -686,7 +706,7 @@ async function loadExistingExams() {
             <button class="btn btn-outline btn-sm btn-danger-outline" onclick="deleteExam(${ex.id})">Xoá</button>
           </td>
         </tr>`).join("")
-      : '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Chưa có đề thi nào.</td></tr>';
+      : `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">${adminExamState.q ? "Không có đề nào khớp." : "Chưa có đề thi nào."}</td></tr>`;
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Lỗi tải danh sách đề thi.</td></tr>';
   }
@@ -698,7 +718,10 @@ let proctorCodeExamId = null;
 
 async function showProctorCode(examId, regenerate = false) {
   proctorCodeExamId = examId;
-  if (!regenerate) loadEntryPassword(examId);
+  if (!regenerate) {
+    loadEntryPassword(examId);
+    loadLockOnLeave(examId);
+  }
   const box = document.getElementById("proctorCodeValue");
   document.getElementById("proctorCodeTitle").textContent = `Mã giám thị · Đề #${examId}`;
   box.textContent = "······";
@@ -710,6 +733,29 @@ async function showProctorCode(examId, regenerate = false) {
   } catch (err) {
     box.textContent = "Lỗi";
     alert("Không lấy được mã giám thị: " + err.message);
+  }
+}
+
+// Khoa bai khi roi trang (mac dinh tat): bat -> roi trang la khoa, giam thi nhap ma moi mo
+async function loadLockOnLeave(examId) {
+  const box = document.getElementById("lockOnLeaveEnabled");
+  try {
+    const rows = await supabaseRequest(`exams?id=eq.${examId}&select=lock_on_leave`);
+    box.checked = !!rows?.[0]?.lock_on_leave;
+  } catch (err) {
+    alert("Không đọc được cài đặt khoá bài: " + err.message);
+  }
+}
+
+async function toggleLockOnLeave() {
+  const on = document.getElementById("lockOnLeaveEnabled").checked;
+  try {
+    await ExamService.updateExam(proctorCodeExamId, { lock_on_leave: on });
+    showToast(on ? "Đã bật: rời trang là khoá bài." : "Đã tắt: rời trang chỉ cảnh báo, không cần mã.");
+    loadExistingExams();
+  } catch (err) {
+    document.getElementById("lockOnLeaveEnabled").checked = !on;
+    alert("Không lưu được: " + err.message);
   }
 }
 
@@ -819,10 +865,52 @@ const EVENT_LABELS = {
   MO_KHOA: ["Mở khoá bài thi", "badge-amber"]
 };
 
-async function loadEvents() {
+// =================================================== BO LOC KET QUA / SU CO (mac dinh: hom nay)
+function localDateValue(offsetDays = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function setFilterDate(offsetDays) {
+  document.getElementById("filterDate").value = offsetDays === null ? "" : localDateValue(offsetDays);
+  applyResultFilters();
+}
+
+function onResultFilterInput() {
+  clearTimeout(resultFilterTimer);
+  resultFilterTimer = setTimeout(applyResultFilters, 350);
+}
+
+function applyResultFilters() {
+  loadResults(1);
+}
+
+// Dieu kien loc dang PostgREST cho 1 cot thoi gian; ngay theo gio may admin (00:00 -> 24:00)
+function resultFilterQuery(timeColumn) {
+  const parts = [];
+  const date = document.getElementById("filterDate").value;
+  if (date) {
+    const start = new Date(`${date}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    parts.push(`${timeColumn}=gte.${pgValue(start.toISOString())}`, `${timeColumn}=lt.${pgValue(end.toISOString())}`);
+  }
+  const student = document.getElementById("filterStudent").value.trim().replace(/[*%,()"]/g, " ");
+  if (student) parts.push(`student_name=ilike.${pgValue(`*${student}*`)}`);
+  const exam = document.getElementById("filterExam").value.trim();
+  if (/^\d+$/.test(exam)) parts.push(`exam_id=eq.${exam}`);
+  return parts.length ? "&" + parts.join("&") : "";
+}
+
+async function loadEvents(page = eventPage) {
+  eventPage = page;
   const tbody = document.getElementById("eventsTableBody");
+  const pager = document.getElementById("eventsPager");
   try {
-    allEvents = await EventService.getAll() || [];
+    const { rows, total } = await supabasePage(`exam_events?select=*&order=id.desc${resultFilterQuery("created_at")}&limit=${EVENT_PAGE}&offset=${(page - 1) * EVENT_PAGE}`);
+    allEvents = rows;
+    pager.innerHTML = pagerHtml({ page, size: EVENT_PAGE, total }, "loadEvents");
     tbody.innerHTML = allEvents.length
       ? allEvents.map((ev, i) => `
         <tr>
@@ -833,7 +921,7 @@ async function loadEvents() {
           <td style="max-width: 360px;">${escapeHtml(ev.detail)}</td>
           <td>${(ev.action_logs || []).length ? `<button class="btn btn-outline btn-sm" onclick="viewEventLogs(${i})">Xem</button>` : "--"}</td>
         </tr>`).join("")
-      : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chưa có sự cố nào.</td></tr>';
+      : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Không có sự cố nào theo bộ lọc.</td></tr>';
   } catch (err) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger);">Không tải được sự cố. Hãy chạy npm run db:migrate để tạo bảng exam_events.</td></tr>';
   }
@@ -850,11 +938,22 @@ function viewEventLogs(i) {
   openModal("detailModal");
 }
 
-async function loadResults() {
-  loadEvents();
+async function loadResults(page = resultPage) {
+  resultPage = page;
+  if (!document.getElementById("filterDate").dataset.init) {
+    document.getElementById("filterDate").dataset.init = "1";
+    document.getElementById("filterDate").value = localDateValue(0); // mac dinh hom nay
+  }
+  loadEvents(1);
   const tbody = document.getElementById("resultsTableBody");
+  const pager = document.getElementById("resultsPager");
   try {
-    allResultsData = await ResultService.getAllResults() || [];
+    const { rows, total } = await supabasePage(`exam_results?select=*&order=id.desc${resultFilterQuery("submitted_at")}&limit=${RESULT_PAGE}&offset=${(page - 1) * RESULT_PAGE}`);
+    allResultsData = rows;
+    pager.innerHTML = pagerHtml({ page, size: RESULT_PAGE, total }, "loadResults");
+    // Ten de cho cac bai tren trang nay
+    const ids = [...new Set(rows.map(r => r.exam_id).filter(id => id != null))];
+    const titles = ids.length ? Object.fromEntries((await supabaseRequest(`exams?select=id,title&id=in.(${ids.join(",")})`) || []).map(e => [e.id, e.title])) : {};
     tbody.innerHTML = allResultsData.length
       ? allResultsData.map((res, i) => {
         const pending = (res.answers || []).filter(e => e.pending).length;
@@ -862,6 +961,7 @@ async function loadResults() {
         <tr>
           <td>#${res.id}</td>
           <td><strong>${escapeHtml(res.student_name)}</strong></td>
+          <td>${escapeHtml(titles[res.exam_id] || (res.exam_id ? `Đề #${res.exam_id} (đã xoá)` : "--"))}</td>
           <td><span class="badge badge-blue">${fmtNum(Number(res.score))} / 10</span></td>
           <td>${pending ? `<span class="badge badge-amber">Chờ chấm ${pending} câu</span>` : '<span class="badge badge-green">Đã chấm</span>'}${logFlags(res.action_logs)}</td>
           <td>${res.duration_minutes || "--"} phút</td>
@@ -869,9 +969,9 @@ async function loadResults() {
           <td><button class="btn btn-outline btn-sm" onclick="viewResultDetail(${i})">${pending ? "Chấm bài" : "Xem"}</button></td>
         </tr>`;
       }).join("")
-      : '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Chưa có bài thi nào được nộp.</td></tr>';
+      : '<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Không có bài nộp nào theo bộ lọc (mặc định: hôm nay).</td></tr>';
   } catch (err) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger);">Lỗi tải kết quả thi.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--danger);">Lỗi tải kết quả thi.</td></tr>';
   }
 }
 

@@ -1,8 +1,11 @@
 // De thi phia thi sinh: danh sach, lay de da loc dap an
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors.ts";
+import type { Page } from "../infra/database/Database.ts";
 import type { ExamStore } from "../repositories/ExamRepository.ts";
+import type { ResultStore } from "../repositories/ResultRepository.ts";
+import { parsePage } from "../utils/paging.ts";
 import type { ClientInfo, EntryCredentials, ExamRow, ExamSummary, StudentQuestion } from "../types.ts";
-import { isId } from "../utils/input.ts";
+import { cleanString, isId } from "../utils/input.ts";
 import type { AttemptService } from "./AttemptService.ts";
 import type { EntryPasswordService } from "./EntryPasswordService.ts";
 import type { GradingService } from "./GradingService.ts";
@@ -12,7 +15,20 @@ export interface StudentExam {
   title: string;
   duration_minutes: number | null;
   questions: StudentQuestion[];
-  entry_token?: string; // de co mat khau: ve vao de (gui lai khi tai lai trang / nop bai)
+  lock_on_leave: boolean; // roi trang -> khoa bai (true) / chi canh bao (false)
+  entry_token?: string;   // de co mat khau: ve vao de (gui lai khi tai lai trang / nop bai)
+}
+
+// 1 de trong danh sach cho thi sinh: kem lan nop gan nhat cua thi sinh (neu co)
+export interface ExamListItem extends ExamSummary {
+  my_result?: { id: number; score: number; pending: number; submitted_at: string | null };
+}
+
+export interface ListExamsQuery {
+  q?: unknown;
+  page?: unknown;
+  size?: unknown;
+  student?: unknown;
 }
 
 export interface ExamServiceDeps {
@@ -20,6 +36,7 @@ export interface ExamServiceDeps {
   attempts: AttemptService;
   grading: GradingService;
   entryPasswords?: EntryPasswordService;
+  results?: ResultStore;
 }
 
 export class ExamService {
@@ -27,16 +44,37 @@ export class ExamService {
   private readonly attempts: AttemptService;
   private readonly grading: GradingService;
   readonly entryPasswords?: EntryPasswordService;
+  private readonly results?: ResultStore;
 
-  constructor({ exams, attempts, grading, entryPasswords }: ExamServiceDeps) {
+  constructor({ exams, attempts, grading, entryPasswords, results }: ExamServiceDeps) {
     this.entryPasswords = entryPasswords;
+    this.results = results;
     this.exams = exams;
     this.attempts = attempts;
     this.grading = grading;
   }
 
-  listExams(): Promise<ExamSummary[]> {
-    return this.exams.listSummaries();
+  // 1 trang danh sach de (mac dinh 3 de / trang, moi nhat truoc), tim theo ten; co student -> kem lan nop gan nhat
+  async listExams({ q, page, size, student }: ListExamsQuery = {}): Promise<Page<ExamListItem>> {
+    const req = parsePage(page, size);
+    const { items, total } = await this.exams.page({ q: cleanString(q, 100), offset: req.offset, limit: req.size });
+    const name = cleanString(student);
+    const mine = name && this.results ? await this.results.listByStudentForExams(name, items.map(e => e.id)) : [];
+    const latest = new Map<number, (typeof mine)[number]>();
+    for (const r of mine) if (r.exam_id !== null && !latest.has(r.exam_id)) latest.set(r.exam_id, r); // da sap moi nhat truoc
+    return {
+      items: items.map(e => {
+        const r = latest.get(e.id);
+        return r ? { ...e, my_result: { id: r.id, score: Number(r.score), pending: this.grading.summarize(r.answers).pending, submitted_at: r.submitted_at } } : e;
+      }),
+      total,
+      page: req.page,
+      size: req.size
+    };
+  }
+
+  titles(ids: number[]): Promise<Map<number, string>> {
+    return this.exams.titles(ids);
   }
 
   // De day du (kem dap an) - chi dung noi bo server
@@ -68,6 +106,7 @@ export class ExamService {
       title: exam.title,
       duration_minutes: exam.duration_minutes,
       questions: (exam.questions ?? []).map(q => this.grading.sanitizeQuestion(q)),
+      lock_on_leave: !!exam.lock_on_leave,
       ...(token ? { entry_token: token } : {})
     };
   }

@@ -11,8 +11,10 @@ android {
         applicationId = "com.safe.exam"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // Phien ban = file VERSION o thu muc goc du an; so ban build (versionCode) do GitHub Actions truyen vao
+        // (so lan build, tu tang -> dien thoai biet day la ban moi hon)
+        versionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = rootProject.file("../VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "1"
 
         // Dia chi trang dang nhap: dat safeExamUrl trong android/gradle.properties
         // (hoac build: gradlew assembleDebug -PsafeExamUrl=https://...)

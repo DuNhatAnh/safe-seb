@@ -564,3 +564,23 @@ body.exam-locked input, body.exam-locked textarea { user-select: text; -webkit-u
 /* Ma giam thi 6 so (admin) */
 .btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; vertical-align: middle; }
 .proctor-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 2.4rem; font-weight: 800; letter-spacing: 0.4em; color: var(--primary); margin: 14px 0 18px; padding-left: 0.4em; }
+
+/* Ten dai (de thi, thi sinh) hien day du, xuong dong thay vi bi cat */
+.brand-title { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.3; }
+.app-header { height: auto; min-height: 56px; flex-wrap: wrap; gap: 8px; padding-top: 8px; padding-bottom: 8px; }
+.exam-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.exam-card-info { flex: 1 1 260px; min-width: 0; }
+.exam-card-title { font-size: 1.05rem; overflow-wrap: anywhere; white-space: normal; }
+.exam-card-meta { font-size: 0.85rem; margin-top: 4px; color: var(--text-muted); }
+.exam-card-action { text-align: right; }
+.wrap-table td, .wrap-table th { white-space: normal; overflow-wrap: anywhere; }
+.wrap-table td strong { overflow-wrap: anywhere; }
+
+/* Phan trang + bo loc */
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0 4px; flex-wrap: wrap; }
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin: 4px 0 14px; }
+.filter-bar label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-muted); }
+.filter-bar .form-control { min-width: 150px; padding: 6px 10px; }
+
+/* Phien ban (cuoi trang) */
+.app-version { text-align: center; font-size: 0.75rem; color: var(--text-muted); margin: 18px 0 24px; }

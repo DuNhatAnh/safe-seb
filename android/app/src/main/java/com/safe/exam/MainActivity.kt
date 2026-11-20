@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -52,12 +53,14 @@ class MainActivity : AppCompatActivity() {
                 return request?.url?.host != examHost
             }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                // Khoa man hinh ngay khi mo app (Device Owner: khoa that; khong thi: ghim man hinh)
-                KioskManager.startLock(this@MainActivity)
-            }
         }
+
+        // BAT BUOC de hien hop thoai alert / confirm cua trang (vd: "Ban chac chan muon nop bai?").
+        // Khong co -> WebView tu tra "Huy" cho moi confirm -> bam Nop bai khong co tac dung.
+        webView.webChromeClient = WebChromeClient()
+
+        // Chi ghim / khoa man hinh khi hoc sinh bam vao de (exam.js goi KioskBridge.startLock),
+        // nop bai xong tu bo ghim (KioskBridge.unlock)
 
         webView.loadUrl(examUrl)
     }

@@ -3,7 +3,9 @@ import { ConflictError, ValidationError } from "../errors.ts";
 import type { ResultStore } from "../repositories/ResultRepository.ts";
 import type { AttemptService } from "./AttemptService.ts";
 import type { ClientInfo, ResultSummaryRow, UntrustedBody } from "../types.ts";
+import type { Page } from "../infra/database/Database.ts";
 import { cleanLogs, cleanString } from "../utils/input.ts";
+import { parsePage } from "../utils/paging.ts";
 import type { ExamService } from "./ExamService.ts";
 import type { GradingService } from "./GradingService.ts";
 
@@ -25,6 +27,7 @@ export interface SubmitResult {
   autoMax: number;
   pending: number;
   duration_minutes: number;
+  seb_quit_url?: string; // dang chay trong SEB: trang thoat SEB (nop xong thoat khong can ma)
 }
 
 export interface SubmissionServiceDeps {
@@ -33,6 +36,7 @@ export interface SubmissionServiceDeps {
   attempts: AttemptService;
   grading: GradingService;
   now?: () => Date;
+  sebQuitUrl?: (examId: number, origin: string) => string;
 }
 
 export class SubmissionService {
@@ -41,8 +45,10 @@ export class SubmissionService {
   private readonly attempts: AttemptService;
   private readonly grading: GradingService;
   private readonly now: () => Date;
+  private readonly sebQuitUrl?: (examId: number, origin: string) => string;
 
-  constructor({ examService, results, attempts, grading, now = () => new Date() }: SubmissionServiceDeps) {
+  constructor({ examService, results, attempts, grading, now = () => new Date(), sebQuitUrl }: SubmissionServiceDeps) {
+    this.sebQuitUrl = sebQuitUrl;
     this.examService = examService;
     this.results = results;
     this.attempts = attempts;
@@ -61,11 +67,17 @@ export class SubmissionService {
     };
   }
 
-  async history(studentName: unknown): Promise<(ResultSummary & { exam_id: number | null })[]> {
+  // 1 trang lich su lam bai (mac dinh 3 bai / trang, moi nhat truoc)
+  async history(studentName: unknown, page?: unknown, size?: unknown): Promise<Page<ResultSummary & { exam_id: number | null; exam_title: string | null }>> {
     const student = cleanString(studentName);
     if (!student) throw new ValidationError("Thiếu tên thí sinh.");
-    const rows = await this.results.listByStudent(student);
-    return rows.map(r => ({ exam_id: r.exam_id, ...this.summaryOf(r) }));
+    const req = parsePage(page, size);
+    const { items, total } = await this.results.pageByStudent(student, req.offset, req.size);
+    const titles = await this.examService.titles(items.flatMap(r => (r.exam_id === null ? [] : [Number(r.exam_id)])));
+    return {
+      items: items.map(r => ({ exam_id: r.exam_id, exam_title: r.exam_id === null ? null : titles.get(Number(r.exam_id)) ?? null, ...this.summaryOf(r) })),
+      total, page: req.page, size: req.size
+    };
   }
 
   // payload: { exam_id, student_name, answers: {[index]: gia tri}, duration_minutes, action_logs }
@@ -97,7 +109,8 @@ export class SubmissionService {
       action_logs: cleanLogs(payload.action_logs),
       submitted_at: this.now().toISOString()
     });
-    return { id: saved.id, score, earned, total, autoMax, pending, duration_minutes: duration };
+    const quit = client?.isSeb && this.sebQuitUrl ? this.sebQuitUrl(exam.id, client.origin) : undefined;
+    return { id: saved.id, score, earned, total, autoMax, pending, duration_minutes: duration, ...(quit ? { seb_quit_url: quit } : {}) };
   }
 
   // Thoi luong do client bao: gioi han trong [1, thoi gian de + 1] phut

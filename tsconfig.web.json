@@ -18,6 +18,7 @@
     "public/js/question-types.js",
     "public/js/lockdown.js",
     "public/js/exam.js",
-    "public/js/admin.js"
+    "public/js/admin.js",
+    "public/js/version.js"
   ]
 }

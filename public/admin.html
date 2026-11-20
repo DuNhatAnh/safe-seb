@@ -73,9 +73,12 @@
         </div>
 
         <div class="card" style="margin-top: 24px;">
-          <h3 style="margin-bottom: 12px;">Các đề thi đã tạo</h3>
+          <div class="preview-head">
+            <h3>Các đề thi đã tạo</h3>
+            <input type="search" id="adminExamSearch" class="form-control" style="max-width: 280px;" placeholder="Tìm đề theo tên..." oninput="onAdminExamSearch(this.value)">
+          </div>
           <div class="table-responsive">
-            <table>
+            <table class="wrap-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -92,6 +95,7 @@
               </tbody>
             </table>
           </div>
+          <div id="adminExamPager"></div>
         </div>
       </section>
 
@@ -156,12 +160,22 @@
             </div>
             <button class="btn btn-outline" onclick="loadResults()">Làm mới</button>
           </div>
+          <!-- Bo loc dung chung cho Ket qua + Su co. Mac dinh: hom nay -->
+          <div class="filter-bar">
+            <label>Ngày <input type="date" id="filterDate" class="form-control" onchange="applyResultFilters()"></label>
+            <button type="button" class="btn btn-outline btn-sm" onclick="setFilterDate(0)">Hôm nay</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="setFilterDate(-1)">Hôm qua</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="setFilterDate(null)">Tất cả ngày</button>
+            <label>Thí sinh <input type="search" id="filterStudent" class="form-control" placeholder="Tên thí sinh..." oninput="onResultFilterInput()"></label>
+            <label>Mã đề <input type="search" id="filterExam" class="form-control" inputmode="numeric" placeholder="vd: 94582" oninput="onResultFilterInput()"></label>
+          </div>
           <div class="table-responsive">
-            <table>
+            <table class="wrap-table">
               <thead>
                 <tr>
                   <th>ID</th>
                   <th>Thí sinh</th>
+                  <th>Đề thi</th>
                   <th>Điểm</th>
                   <th>Trạng thái</th>
                   <th>Thời lượng</th>
@@ -171,22 +185,23 @@
               </thead>
               <tbody id="resultsTableBody">
                 <tr>
-                  <td colspan="7" style="text-align: center;">Đang tải dữ liệu...</td>
+                  <td colspan="8" style="text-align: center;">Đang tải dữ liệu...</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <div id="resultsPager"></div>
         </div>
 
         <div class="card" style="margin-top: 16px;">
           <div class="preview-head">
             <div>
               <h2>Sự cố phòng thi</h2>
-              <p>Mỗi lần nhập mật khẩu giám thị (đúng hoặc sai) để thí sinh thoát khẩn cấp hoặc thoát ứng dụng.</p>
+              <p>Thoát khẩn cấp, mở khoá bài, cho làm lại, nhập sai mã. Lọc theo cùng bộ lọc ở trên.</p>
             </div>
           </div>
           <div class="table-responsive">
-            <table>
+            <table class="wrap-table">
               <thead>
                 <tr>
                   <th>Thời điểm</th>
@@ -204,6 +219,7 @@
               </tbody>
             </table>
           </div>
+          <div id="eventsPager"></div>
         </div>
       </section>
     </main>
@@ -343,6 +359,15 @@
         <button class="btn btn-outline" onclick="closeModal('proctorCodeModal')">Đóng</button>
       </div>
 
+      <!-- Khoa bai khi roi trang (mac dinh tat) -->
+      <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; text-align: left;">
+        <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
+          <input type="checkbox" id="lockOnLeaveEnabled" onchange="toggleLockOnLeave()" style="margin-top: 4px;">
+          <span><strong>Khoá bài khi học sinh rời trang</strong><br>
+            <span class="field-hint">Tắt (mặc định): rời trang chỉ bị cảnh báo và ghi nhật ký, học sinh tự quay lại làm tiếp. Bật: rời trang là bài bị khoá, giám thị nhập mã giám thị ở trên mới mở được.</span></span>
+        </label>
+      </div>
+
       <!-- Mat khau vao de (mac dinh tat), khac ma giam thi -->
       <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; text-align: left;">
         <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
@@ -410,6 +435,8 @@
   <script src="js/app.js"></script>
   <script src="js/question-types.js"></script>
   <script src="js/admin.js"></script>
+  <div class="app-version"></div>
+  <script src="js/version.js"></script>
 </body>
 
 </html>

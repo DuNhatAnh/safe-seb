@@ -1,12 +1,13 @@
 // Cai dat Database trong bo nho, cung hanh vi voi SupabaseDatabase. Dung cho test nghiep vu
 // (chay repository + service that, khong can mang / Supabase).
-import type { Database, Filter, SelectOptions, TableName } from "./Database.ts";
+import type { Database, Filter, FilterValue, Scalar, Search, SelectOptions, TableName } from "./Database.ts";
 
 type Row = Record<string, unknown>;
 
 export class MemoryDatabase implements Database {
   private readonly tables = new Map<TableName, Row[]>();
   private nextId = 1;
+  private clock = 0; // created_at tang dan theo thu tu them (sap xep "moi nhat" on dinh)
 
   constructor(seed: Partial<Record<TableName, readonly object[]>> = {}) {
     for (const [table, rows] of Object.entries(seed) as [TableName, object[]][]) {
@@ -19,14 +20,18 @@ export class MemoryDatabase implements Database {
     return this.tables.get(table)!;
   }
 
-  async select<T>(table: TableName, { columns, filter, orderBy, limit }: SelectOptions = {}): Promise<T[]> {
-    let rows = this.rows(table).filter(MemoryDatabase.matches(filter));
+  async select<T>(table: TableName, { columns, filter, search, orderBy, limit, offset = 0 }: SelectOptions = {}): Promise<T[]> {
+    let rows = this.find(table, filter, search);
     if (orderBy) {
       const dir = orderBy.ascending === false ? -1 : 1;
       rows = [...rows].sort((a, b) => MemoryDatabase.compare(a[orderBy.column], b[orderBy.column]) * dir);
     }
-    if (limit !== undefined) rows = rows.slice(0, limit);
+    rows = rows.slice(offset, limit !== undefined ? offset + limit : undefined);
     return rows.map(r => structuredClone(columns?.length ? Object.fromEntries(columns.map(c => [c, r[c]])) : r) as T);
+  }
+
+  async count(table: TableName, { filter, search }: Pick<SelectOptions, "filter" | "search"> = {}): Promise<number> {
+    return this.find(table, filter, search).length;
   }
 
   async insert<T>(table: TableName, row: object): Promise<T> {
@@ -34,22 +39,36 @@ export class MemoryDatabase implements Database {
   }
 
   async update<T>(table: TableName, filter: Filter, patch: object): Promise<T[]> {
-    return this.rows(table).filter(MemoryDatabase.matches(filter)).map(r => structuredClone(Object.assign(r, patch)) as T);
+    return this.find(table, filter).map(r => structuredClone(Object.assign(r, patch)) as T);
   }
 
   async remove(table: TableName, filter: Filter): Promise<void> {
-    const keep = this.rows(table).filter(r => !MemoryDatabase.matches(filter)(r));
-    this.tables.set(table, keep);
+    const drop = new Set(this.find(table, filter));
+    this.tables.set(table, this.rows(table).filter(r => !drop.has(r)));
+  }
+
+  private find(table: TableName, filter: Filter = {}, search?: Search): Row[] {
+    const term = search?.term.trim().toLowerCase();
+    return this.rows(table).filter(r =>
+      Object.entries(filter).every(([k, v]) => MemoryDatabase.matches(r[k], v)) &&
+      (!search || !term || String(r[search.column] ?? "").toLowerCase().includes(term)));
   }
 
   private insertRow(table: TableName, row: Row): Row {
-    const saved: Row = { id: this.nextId++, created_at: new Date().toISOString(), ...structuredClone(row) };
+    const createdAt = new Date(Date.UTC(2026, 0, 1) + this.clock++ * 1000).toISOString();
+    const saved: Row = { id: this.nextId++, created_at: createdAt, ...structuredClone(row) };
     this.rows(table).push(saved);
     return saved;
   }
 
-  private static matches(filter: Filter = {}): (r: Row) => boolean {
-    return r => Object.entries(filter).every(([k, v]) => (v === null ? r[k] == null : String(r[k]) === String(v)));
+  private static matches(actual: unknown, expected: FilterValue): boolean {
+    if (expected === null) return actual == null;
+    if (Array.isArray(expected)) return expected.some(v => String(v) === String(actual));
+    if (typeof expected === "object") {
+      const { gte, lt } = expected as { gte?: Scalar; lt?: Scalar };
+      return (gte === undefined || MemoryDatabase.compare(actual, gte) >= 0) && (lt === undefined || MemoryDatabase.compare(actual, lt) < 0);
+    }
+    return String(actual) === String(expected);
   }
 
   private static compare(a: unknown, b: unknown): number {

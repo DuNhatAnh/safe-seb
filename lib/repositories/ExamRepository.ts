@@ -6,8 +6,11 @@ import type { ExamRow, ExamSummary } from "../types.ts";
 const SUMMARY_COLUMNS = ["id", "title", "duration_minutes", "assigned_to", "require_seb", "require_password", "created_at"] as const;
 
 export interface ExamStore {
-  listSummaries(): Promise<ExamSummary[]>;
+  // 1 trang danh sach de, moi tao truoc; q: tim theo ten de
+  page(options: { q?: string; offset: number; limit: number }): Promise<{ items: ExamSummary[]; total: number }>;
   findById(id: number | string): Promise<ExamRow | null>;
+  // Ten de theo ma (lich su lam bai)
+  titles(ids: number[]): Promise<Map<number, string>>;
   setProctorCode(id: number, code: string): Promise<void>;
   update(id: number, patch: Partial<ExamRow>): Promise<void>;
 }
@@ -19,8 +22,19 @@ export class ExamRepository implements ExamStore {
     this.db = db;
   }
 
-  listSummaries(): Promise<ExamSummary[]> {
-    return this.db.select<ExamSummary>("exams", { columns: SUMMARY_COLUMNS, orderBy: { column: "id", ascending: false } });
+  async page({ q, offset, limit }: { q?: string; offset: number; limit: number }): Promise<{ items: ExamSummary[]; total: number }> {
+    const search = q ? { column: "title", term: q } : undefined;
+    const [items, total] = await Promise.all([
+      this.db.select<ExamSummary>("exams", { columns: SUMMARY_COLUMNS, search, orderBy: { column: "created_at", ascending: false }, offset, limit }),
+      this.db.count("exams", { search })
+    ]);
+    return { items, total };
+  }
+
+  async titles(ids: number[]): Promise<Map<number, string>> {
+    if (!ids.length) return new Map();
+    const rows = await this.db.select<{ id: number; title: string }>("exams", { columns: ["id", "title"], filter: { id: [...new Set(ids)] } });
+    return new Map(rows.map(r => [Number(r.id), r.title]));
   }
 
   async findById(id: number | string): Promise<ExamRow | null> {

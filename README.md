@@ -38,6 +38,13 @@ Triển khai Vercel: khai báo đủ 5 biến trong `.env.example` ở Project S
 
 - Địa chỉ truy cập: http://localhost:3000 (hoặc http://localhost:3000/index.html)
 
+### Phiên bản
+
+Phiên bản nằm trong file **`VERSION`** (hiện là `1`). Ra bản mới: sửa thành `2`, `3`... rồi push.
+- Cuối mọi trang hiện **"Phiên bản 1 · a1b2c3d"** (mã commit Vercel đang chạy).
+- Trong app Android hiện thêm **"App 1 (bản 12)"**: *bản 12* = lần build thứ 12 trên GitHub (tự tăng), nhìn là biết điện thoại đã cài bản mới chưa.
+- Sửa phần web: chỉ cần push, mở lại app là có bản mới. Sửa code `android/` hoặc `VERSION`: GitHub build app mới, học sinh **gỡ app cũ rồi cài lại**.
+
 ### App Android (cài về máy rồi làm bài)
 
 Học sinh tải **safe-exam.apk** (nút "Tải app" hiện trên trang đăng nhập khi mở bằng điện thoại Android), cài, mở, bấm **Ghim** là làm bài. GitHub tự build file cài (`.github/workflows/android-apk.yml`). Muốn khoá cứng hẳn (không gỡ ghim được) thì đặt app làm **Device Owner** bằng 1 lệnh `adb`. Chi tiết: [docs/android-kiosk.md](docs/android-kiosk.md).

@@ -2,7 +2,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FULL_EXAM, FULL_EXAM_CODE, FULL_EXAM_RIGHT } from "./support/fixtures.ts";
 import { PROCTOR_PASSWORD } from "./support/env.ts";
-import { acceptDialogs, answerCurrent, dbState, leaveExam, loginStudent, resetDb, returnToExam, seed, type StudentAnswer } from "./support/helpers.ts";
+import { acceptDialogs, answerCurrent, dbState, leaveExam, loginStudent, resetDb, returnToExam, seed, updateRow, type StudentAnswer } from "./support/helpers.ts";
 
 let examId: number;
 
@@ -137,7 +137,8 @@ test("ô số nhập sai định dạng thì báo lỗi và không tính là đ�
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 0 / 5");
 });
 
-test("tải lại trang giữa chừng: giữ bài làm nhưng bài bị khoá (tính là rời bài)", async ({ page }) => {
+test("đề bật khoá khi rời trang: tải lại giữa chừng giữ bài làm nhưng bài bị khoá", async ({ page }) => {
+  await updateRow("exams", examId, { lock_on_leave: true });
   await startExam(page, "hs_tai_lai");
   await answerCurrent(page, FULL_EXAM_RIGHT[0]);
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
@@ -179,7 +180,8 @@ test("thoát khẩn cấp: sai mật khẩu bị ghi log, đúng mật khẩu th
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
 });
 
-test("rời bài thi là khoá ngay; tải lại không gỡ được; chỉ mã giám thị mở được", async ({ page }) => {
+test("đề bật khoá khi rời trang: rời bài là khoá ngay; tải lại không gỡ được; chỉ mã giám thị mở được", async ({ page }) => {
+  await updateRow("exams", examId, { lock_on_leave: true });
   await startExam(page, "hs_roi_bai");
   await answerCurrent(page, FULL_EXAM_RIGHT[0]);
   const shield = page.locator("#viewShield");
@@ -215,4 +217,29 @@ test("rời bài thi là khoá ngay; tải lại không gỡ được; chỉ mã
   await leaveExam(page);
   await returnToExam(page);
   await expect(page.locator("#shieldTitle")).toHaveText("BÀI THI ĐÃ BỊ KHOÁ");
+});
+
+test("mặc định (tắt khoá): rời trang chỉ cảnh báo + ghi nhật ký, tự quay lại làm tiếp, không cần mã", async ({ page }) => {
+  await startExam(page, "hs_mac_dinh");
+  await leaveExam(page);
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldTitle")).toHaveText("BẠN ĐÃ RỜI BÀI THI");
+  await expect(page.locator("#shieldLocked")).toBeHidden();
+  await returnToExam(page);
+  await expect(page.locator("#viewShield")).toBeHidden();
+  await leaveExam(page);
+  await returnToExam(page);
+  await expect(page.locator("#viewShield")).toBeHidden(); // khong bao gio bi khoa
+  await answerCurrent(page, FULL_EXAM_RIGHT[0]);
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
+});
+
+test("nộp bài xong: thoát không cần mã giám thị", async ({ page }) => {
+  acceptDialogs(page);
+  await startExam(page, "hs_thoat_sau_nop");
+  await answerAll(page, FULL_EXAM_RIGHT);
+  await page.locator("#btnSubmit").click();
+  await expect(page.locator("#viewLockScreen")).toBeVisible();
+  await page.locator("#btnExitAfterSubmit").click();
+  await expect(page).toHaveURL(/index\.html/);
 });

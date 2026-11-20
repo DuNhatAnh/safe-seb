@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "functions": {
     "api/index.js": {
-      "includeFiles": "{dist/**,public/js/app.js,public/js/question-types.js}"
+      "includeFiles": "{dist/**,public/js/app.js,public/js/question-types.js,VERSION}"
     }
   },
   "rewrites": [

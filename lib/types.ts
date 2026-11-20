@@ -47,6 +47,8 @@ export interface ExamRow {
   // Mat khau vao de (mac dinh tat): hoc sinh nhap moi bat dau lam duoc. Khac ma giam thi.
   require_password?: boolean;
   entry_password?: string | null;
+  // Khoa bai khi hoc sinh roi trang (mac dinh tat: chi canh bao + ghi nhat ky)
+  lock_on_leave?: boolean;
   created_at?: string;
 }
 

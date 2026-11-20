@@ -217,9 +217,18 @@ async function supabaseRequest(endpoint, method = "GET", body = null, extraHeade
   }
 }
 
+// Trang admin: GET kem tong so dong (phan trang). Tra { rows, total }
+async function supabasePage(endpoint) {
+  return await apiRequest("admin/rest", { method: "POST", body: { method: "GET", path: endpoint, count: true } });
+}
+
+// Ma hoa gia tri dua vao duong dan PostgREST (dau cach, dau phay, ky tu tieng Viet...)
+const pgValue = v => encodeURIComponent(v);
+
 // API cho thi sinh: de da bo dap an, nop bai de server cham, thoat can mat khau giam thi
 const StudentApi = {
-  listExams: () => apiRequest("exams"),
+  // Phan trang phia server: { items, total, page, size }
+  listExams: ({ q = "", page = 1, size = 3, student = "" } = {}) => apiRequest("exams", { query: { q, page, size, student } }),
   // entry: { password } (vua nhap) hoac { token } (ve vao de lan truoc) - gui qua header, khong de trong URL
   getExam: (id, student, entry = {}) => apiRequest("exam", {
     query: { id, student },
@@ -230,7 +239,7 @@ const StudentApi = {
   }),
   // Admin: mat khau vao de ({ enabled?, regenerate? })
   entryPassword: (examId, changes = {}) => apiRequest("admin/entry-password", { method: "POST", body: { exam_id: examId, ...changes } }),
-  history: student => apiRequest("history", { query: { student } }),
+  history: (student, page = 1, size = 3) => apiRequest("history", { query: { student, page, size } }),
   submit: payload => apiRequest("submit", { method: "POST", body: payload }),
   proctorExit: payload => apiRequest("proctor-exit", { method: "POST", body: payload }),
   // Giam thi nhap ma de cho thi sinh lam them 1 luot
@@ -425,3 +434,14 @@ const EntryToken = {
     try { localStorage.removeItem(this.key(examId, student)); } catch (e) { }
   }
 };
+
+// 15. Thanh phan trang: "‹ Trước | Trang 2/5 · 14 mục | Sau ›" (onGo: ten ham toan cuc nhan so trang)
+function pagerHtml({ page, size, total }, onGo) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  if (pages <= 1) return total ? `<div class="pager"><span class="field-hint">${total} mục</span></div>` : "";
+  return `<div class="pager">
+    <button type="button" class="btn btn-outline btn-sm" ${page <= 1 ? "disabled" : ""} onclick="${onGo}(${page - 1})">‹ Trước</button>
+    <span class="field-hint">Trang ${page}/${pages} · ${total} mục</span>
+    <button type="button" class="btn btn-outline btn-sm" ${page >= pages ? "disabled" : ""} onclick="${onGo}(${page + 1})">Sau ›</button>
+  </div>`;
+}

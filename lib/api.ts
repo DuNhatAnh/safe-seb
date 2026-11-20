@@ -40,8 +40,9 @@ export function createApi({ config = new Config(), fetchImpl }: CreateApiOptions
   const grading = new GradingService();
   const attempts = new AttemptService({ results, events });
   const entryPasswordService = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter() });
-  const examService = new ExamService({ exams, attempts, grading, entryPasswords: entryPasswordService });
-  const submissionService = new SubmissionService({ examService, results, attempts, grading });
+  const examService = new ExamService({ exams, attempts, grading, entryPasswords: entryPasswordService, results });
+  const sebQuitUrlOf = (examId: number, origin: string): string => sebConfigService.quitUrl(examId, origin);
+  const submissionService = new SubmissionService({ examService, results, attempts, grading, sebQuitUrl: sebQuitUrlOf });
   const sebConfigService = new SebConfigService({ config, exams });
   const proctorService = new ProctorService({
     config, exams, events, attempts, limiter: new RateLimiter(),

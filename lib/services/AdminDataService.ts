@@ -23,10 +23,12 @@ export class AdminDataService {
   }
 
   // request: { method, path: "exams?id=eq.1", body, prefer }
-  query({ method, path, body, prefer }: UntrustedBody): Promise<unknown> {
+  // count: true (chi GET) -> { rows, total } de trang admin phan trang
+  query({ method, path, body, prefer, count }: UntrustedBody): Promise<unknown> {
     const p = String(path ?? "");
     if (!ADMIN_TABLES.test(p) || /\.\.|\s/.test(p)) throw new ValidationError("Đường dẫn không hợp lệ.");
     const verb = METHODS.includes(method as RestMethod) ? (method as RestMethod) : "GET";
+    if (verb === "GET" && count === true) return this.db.restWithCount(p);
     return this.db.rest(p, {
       method: verb,
       body: verb === "POST" && /^exams(\?|$)/.test(p) ? this.withProctorCode(body) : body ?? undefined,

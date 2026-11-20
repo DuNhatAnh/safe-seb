@@ -2,6 +2,7 @@
 // Ham dung chung cho test giao dien
 import { expect, type Page } from "@playwright/test";
 import { ADMIN_PASSWORD, MOCK_URL } from "./env.ts";
+import { SERVICE_KEY } from "./mockSupabase.ts";
 
 type Row = Record<string, unknown>;
 export interface DbState {
@@ -19,6 +20,15 @@ export async function resetDb(): Promise<void> {
 export async function seed(table: keyof DbState, rows: Row[]): Promise<Row[]> {
   const res = await fetch(`${MOCK_URL}/__test/seed`, { method: "POST", body: JSON.stringify({ table, rows }) });
   return (await res.json()) as Row[];
+}
+
+// Sua 1 dong (vd: bat "khoa bai khi roi trang" cho de) qua REST cua Supabase gia lap
+export async function updateRow(table: keyof DbState, id: unknown, patch: Row): Promise<void> {
+  await fetch(`${MOCK_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: "PATCH",
+    headers: { apikey: SERVICE_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(patch)
+  });
 }
 
 export async function dbState(): Promise<DbState> {
