@@ -239,7 +239,7 @@ const StudentApi = {
   }),
   // Admin: mat khau vao de ({ enabled?, regenerate? })
   entryPassword: (examId, changes = {}) => apiRequest("admin/entry-password", { method: "POST", body: { exam_id: examId, ...changes } }),
-  history: (student, page = 1, size = 3) => apiRequest("history", { query: { student, page, size } }),
+  history: (student, page = 1, size = 3, examId = "") => apiRequest("history", { query: { student, page, size, exam_id: examId } }),
   submit: payload => apiRequest("submit", { method: "POST", body: payload }),
   proctorExit: payload => apiRequest("proctor-exit", { method: "POST", body: payload }),
   // Giam thi nhap ma de cho thi sinh lam them 1 luot

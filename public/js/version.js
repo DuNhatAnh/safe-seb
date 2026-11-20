@@ -1,4 +1,4 @@
-// Hien phien ban o cuoi trang (phan tu .app-version): "Phiên bản 1 · a1b2c3d" (+ "App 1 (bản 12)" khi chay trong app Android)
+// Hien phien ban o cuoi trang (phan tu .app-version): "Phiên bản 1.1 · a1b2c3d" (+ "App v1.1" khi chay trong app Android)
 (function () {
   function apply(text) {
     document.querySelectorAll(".app-version").forEach(function (el) { el.textContent = text; });

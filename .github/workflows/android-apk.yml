@@ -32,35 +32,52 @@ jobs:
         with:
           gradle-version: "8.5"
 
-      # Phien ban = file VERSION; so ban build = so lan chay workflow (tu tang)
+      # Phien ban = file VERSION, dang LON.NHO (1.0, 1.1, 2.0...) - quy tac trong CHANGELOG.md
       - name: Phien ban
         id: ver
-        run: echo "name=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+        run: |
+          V=$(tr -d '[:space:]' < VERSION)
+          if ! echo "$V" | grep -Eq '^[0-9]+\.[0-9]+$'; then echo "::error::VERSION phai dang LON.NHO (vd 1.1), dang la '$V'"; exit 1; fi
+          echo "name=$V" >> "$GITHUB_OUTPUT"
 
       - name: Build APK
         working-directory: android
         env:
           SAFE_EXAM_URL: ${{ vars.SAFE_EXAM_URL }}
         run: |
-          ARGS="-PappVersionCode=${{ github.run_number }}"
-          if [ -n "$SAFE_EXAM_URL" ]; then ARGS="$ARGS -PsafeExamUrl=$SAFE_EXAM_URL"; fi
+          ARGS=""
+          if [ -n "$SAFE_EXAM_URL" ]; then ARGS="-PsafeExamUrl=$SAFE_EXAM_URL"; fi
           gradle assembleDebug --no-daemon $ARGS
           cp app/build/outputs/apk/debug/app-debug.apk ../safe-exam.apk
+          # Ten file kem phien ban: nhin ten file la biet dang tai ban may
+          cp app/build/outputs/apk/debug/app-debug.apk "../safe-exam-v${{ steps.ver.outputs.name }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: safe-exam-apk
-          path: safe-exam.apk
+          name: safe-exam-v${{ steps.ver.outputs.name }}
+          path: safe-exam-v*.apk
+
+      # Xoa file co ten phien ban cu trong release (chi giu ban moi nhat + safe-exam.apk)
+      - name: Xoa file phien ban cu
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view apk-latest --repo "${{ github.repository }}" --json assets --jq '.assets[].name' 2>/dev/null \
+            | grep -E '^safe-exam-v.*\.apk$' \
+            | while read -r name; do gh release delete-asset apk-latest "$name" --repo "${{ github.repository }}" -y; done || true
 
       - name: Dang len link tai co dinh (release "apk-latest")
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: "Safe Exam v${{ steps.ver.outputs.name }} (bản ${{ github.run_number }})"
+          name: "Safe Exam v${{ steps.ver.outputs.name }}"
           body: |
-            Phiên bản ${{ steps.ver.outputs.name }} · bản build ${{ github.run_number }} · commit ${{ github.sha }}
-            Tải safe-exam.apk về điện thoại Android, cài đặt, mở app. Cuối trang đăng nhập hiện "App ${{ steps.ver.outputs.name }} (bản ${{ github.run_number }})".
+            Phiên bản ${{ steps.ver.outputs.name }} · commit ${{ github.sha }} · có gì mới: xem CHANGELOG.md
+            Tải file safe-exam-v${{ steps.ver.outputs.name }}.apk (link ngắn: https://safe-seb.vercel.app/tai-app) về điện thoại Android, cài đặt, mở app.
+            Cuối trang đăng nhập hiện "App v${{ steps.ver.outputs.name }}".
             Cài bản mới: gỡ app Safe Exam cũ trước rồi cài.
-          files: safe-exam.apk
+          files: |
+            safe-exam.apk
+            safe-exam-v*.apk
           overwrite_files: true
           make_latest: true

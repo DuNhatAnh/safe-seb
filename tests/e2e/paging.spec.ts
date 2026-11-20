@@ -34,10 +34,12 @@ test("học sinh: danh sách đề 3 / trang, mới nhất trước, tìm theo t
   expect(box.scroll).toBeLessThanOrEqual(box.client + 1);
 });
 
-test("học sinh: lịch sử làm bài 3 / trang, mới nhất trước", async ({ page }) => {
+test("học sinh: lịch sử từng đề trong modal, 3 lần / trang, mới nhất trước", async ({ page }) => {
   const [exam] = await seed("exams", [{ title: "Đề lịch sử", duration_minutes: 10, questions: [] }]);
   await seed("exam_results", [1, 2, 3, 4].map(i => ({ exam_id: exam.id, student_name: "hs_lich_su", score: i, answers: [], duration_minutes: i, submitted_at: `2026-11-1${i}T08:00:00Z` })));
   await loginStudent(page, "hs_lich_su");
+  await page.locator(".card", { hasText: "Đề lịch sử" }).getByRole("button", { name: "Lịch sử", exact: true }).click();
+  await expect(page.locator("#historyTitle")).toContainText("Đề lịch sử");
   const rows = page.locator("#historyContainer tbody tr");
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText("4/10");
@@ -45,7 +47,6 @@ test("học sinh: lịch sử làm bài 3 / trang, mới nhất trước", async
   await page.locator("#historyPager").getByRole("button", { name: "Sau ›" }).click();
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("1/10");
-  await expect(rows.first()).toContainText("Đề lịch sử");
 });
 
 test("admin: kết quả mặc định lọc hôm nay; đổi ngày / tên thí sinh / mã đề", async ({ page }) => {

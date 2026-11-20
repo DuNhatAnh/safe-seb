@@ -16,7 +16,9 @@
     "db:status": "node scripts/db.ts status",
     "db:migrate": "node scripts/db.ts migrate",
     "db:new": "node scripts/db.ts new",
-    "exam:import": "node scripts/import-exam.ts"
+    "exam:import": "node scripts/import-exam.ts",
+    "version:small": "node scripts/bump-version.ts small",
+    "version:big": "node scripts/bump-version.ts big"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.17",

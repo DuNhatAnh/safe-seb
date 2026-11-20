@@ -79,7 +79,8 @@
 
   <script>
     // Link tai app Android (release "apk-latest" do .github/workflows/android-apk.yml dang)
-    const APK_URL = 'https://github.com/DuNhatAnh/safe-seb/releases/download/apk-latest/safe-exam.apk';
+    // /tai-app: server chuyen toi file .apk moi nhat co ten kem phien ban (vd: safe-exam-v1.1.apk)
+    const APK_URL = '/tai-app';
     if (/Android/i.test(navigator.userAgent) && !window.KioskBridge) {
       document.getElementById('apkLink').href = APK_URL;
       document.getElementById('apkBox').style.display = 'block';

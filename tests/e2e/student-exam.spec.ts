@@ -16,6 +16,9 @@ async function startExam(page: Page, student: string): Promise<void> {
   await page.getByRole("button", { name: "Vào làm bài" }).click();
   await expect(page.locator("#viewExamPlay")).toBeVisible();
   await expect(page.locator("#viewShield")).toBeHidden(); // khong bi man che lockdown chan
+  // Cho bai thi vao han che do thi (toan man hinh xong) truoc khi gia lap roi trang
+  // (Lockdown khai bao bang const o pham vi toan cuc cua trang, khong nam tren window -> goi theo ten)
+  await page.waitForFunction("typeof Lockdown !== 'undefined' && Lockdown.wasOk === true");
 }
 
 async function answerAll(page: Page, answers: StudentAnswer[]): Promise<void> {
@@ -65,10 +68,17 @@ test("làm đủ mới nộp được → server chấm đúng → lưu kết qu
   expect(logTypes).toEqual(expect.arrayContaining(["BAT_DAU", "CHON_DAP_AN", "NHAP_DAP_AN", "NOP_BAI"]));
 
   // Lich su; de da nop chi con nut "Lam lai" (can ma giam thi)
+  // "Xem lich su" -> modal lich su cua chinh de vua nop
   await page.getByRole("button", { name: "Xem lịch sử làm bài" }).click();
-  await expect(page.locator("#historyContainer")).toContainText(FULL_EXAM.title);
+  await expect(page.locator("#historyModal")).toBeVisible();
+  await expect(page.locator("#historyTitle")).toContainText(FULL_EXAM.title);
   await expect(page.locator("#historyContainer")).toContainText("8,33/10");
+  await page.getByRole("button", { name: "Đóng" }).click();
+  await expect(page.locator("#historyModal")).toBeHidden();
+  // The de da nop: nut Lich su + Lam lai; khong con phan lich su o cuoi trang
+  await expect(page.getByRole("button", { name: "Lịch sử", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Làm lại" })).toBeVisible();
+  await expect(page.locator("#historySection")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Vào làm bài" })).toHaveCount(0);
 });
 
@@ -80,6 +90,7 @@ test("làm lại lần 2: phải nhập đúng mã giám thị của đề, có 
   await page.locator("#btnSubmit").click();
   await expect(page.locator("#viewLockScreen")).toBeVisible();
   await page.getByRole("button", { name: "Xem lịch sử làm bài" }).click();
+  await page.getByRole("button", { name: "Đóng" }).click();
 
   // Bam Lam lai -> hop thoai ma giam thi
   await page.getByRole("button", { name: "Làm lại" }).click();
@@ -110,8 +121,22 @@ test("làm lại lần 2: phải nhập đúng mã giám thị của đề, có 
 
   // Lan 3 lai can ma
   await page.getByRole("button", { name: "Xem lịch sử làm bài" }).click();
+  await expect(page.locator("#historyContainer tbody tr")).toHaveCount(2); // 2 lan lam de nay
+  await page.getByRole("button", { name: "Đóng" }).click();
   await page.getByRole("button", { name: "Làm lại" }).click();
   await expect(page.locator("#viewUnlockModal")).toBeVisible();
+
+  // Ma giam thi da tu doi sau lan cho lam lai: ma cu khong dung duoc nua
+  const newCode = String((await dbState()).exams[0].proctor_code);
+  expect(newCode).toMatch(/^\d{6}$/);
+  expect(newCode).not.toBe(FULL_EXAM_CODE);
+  await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
+  await page.locator("#btnConfirmExit").click();
+  await expect(page.locator("#unlockError")).toBeVisible();
+  await expect(page.locator("#unlockError")).toContainText("Mã giám thị không đúng");
+  await page.locator("#proctorInput").fill(newCode);
+  await page.locator("#btnConfirmExit").click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
 });
 
 test("trả lời sai được chấm 0, đúng sai chấm theo thang THPT", async ({ page }) => {

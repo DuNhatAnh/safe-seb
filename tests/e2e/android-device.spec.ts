@@ -57,7 +57,7 @@ test("điện thoại Android mở bằng trình duyệt: hiện nút tải app;
   const android = await (await browser.newContext({ userAgent: "Mozilla/5.0 (Linux; Android 14; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36" })).newPage();
   await android.goto("/index.html");
   await expect(android.locator("#apkBox")).toBeVisible();
-  await expect(android.locator("#apkLink")).toHaveAttribute("href", /releases\/download\/apk-latest\/safe-exam\.apk$/);
+  await expect(android.locator("#apkLink")).toHaveAttribute("href", "/tai-app");
 
   await fakeAndroid(android, false); // dang o trong app
   await android.goto("/index.html");

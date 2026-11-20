@@ -2,6 +2,7 @@
 import { RawResponse, type Router } from "../http/Router.ts";
 import type { ExamService } from "../services/ExamService.ts";
 import type { ProctorService } from "../services/ProctorService.ts";
+import type { AppDownloadService } from "../services/AppDownloadService.ts";
 import type { SebConfigService } from "../services/SebConfigService.ts";
 import type { SubmissionService } from "../services/SubmissionService.ts";
 import { cleanString } from "../utils/input.ts";
@@ -12,6 +13,7 @@ export interface StudentControllerDeps {
   submissionService: SubmissionService;
   proctorService: ProctorService;
   sebConfigService: SebConfigService;
+  appDownloadService?: AppDownloadService;
 }
 
 export class StudentController {
@@ -19,8 +21,10 @@ export class StudentController {
   private readonly submissionService: SubmissionService;
   private readonly proctorService: ProctorService;
   private readonly sebConfigService: SebConfigService;
+  private readonly appDownloadService?: AppDownloadService;
 
-  constructor({ examService, submissionService, proctorService, sebConfigService }: StudentControllerDeps) {
+  constructor({ examService, submissionService, proctorService, sebConfigService, appDownloadService }: StudentControllerDeps) {
+    this.appDownloadService = appDownloadService;
     this.sebConfigService = sebConfigService;
     this.examService = examService;
     this.submissionService = submissionService;
@@ -35,6 +39,10 @@ export class StudentController {
     router
       // Phien ban dang chay (hien o cuoi trang)
       .get("version", () => versionInfo())
+      // Link tai app co dinh (/tai-app) -> file .apk moi nhat co ten kem phien ban
+      .get("app-download", async () => RawResponse.redirect(
+        this.appDownloadService ? await this.appDownloadService.latestUrl() : "https://github.com/DuNhatAnh/safe-seb/releases/download/apk-latest/safe-exam.apk"
+      ))
       .get("exams", ({ query }) => this.examService.listExams({
         q: query.get("q"), page: query.get("page"), size: query.get("size"), student: query.get("student")
       }))
@@ -44,7 +52,7 @@ export class StudentController {
         token: StudentController.header(req.headers["x-exam-entry"]),
         ip
       }))
-      .get("history", ({ query }) => this.submissionService.history(query.get("student"), query.get("page"), query.get("size")))
+      .get("history", ({ query }) => this.submissionService.history(query.get("student"), query.get("page"), query.get("size"), query.get("exam_id")))
       .post("submit", ({ body, client }) => this.submissionService.submit(body, client))
       .post("proctor-exit", ({ body, ip, client }) => this.proctorService.authorizeExit(body, ip, client))
       // File cau hinh SEB cua de (cong khai: SEB tai qua link sebs://)

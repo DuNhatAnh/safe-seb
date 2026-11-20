@@ -12,6 +12,7 @@ import { secureCompare } from "../security/secureCompare.ts";
 import type { ClientInfo, EventType, ExamRow, UntrustedBody } from "../types.ts";
 import { cleanLogs, cleanString, isId } from "../utils/input.ts";
 import type { AttemptService } from "./AttemptService.ts";
+import { generateProctorCode } from "../security/proctorCode.ts";
 
 type ExitType = Extract<EventType, "THOAT_KHAN_CAP" | "THOAT_UNG_DUNG" | "MO_KHOA">;
 const EXIT_TYPES: readonly ExitType[] = ["THOAT_KHAN_CAP", "THOAT_UNG_DUNG", "MO_KHOA"];
@@ -32,6 +33,8 @@ export interface ProctorServiceDeps {
   limiter: RateLimiter;
   // Trang thoat SEB cua de (SebConfigService.quitUrl): dang chay trong SEB thi tra ve de app mo -> SEB tu dong
   sebQuitUrl?: (examId: number, origin: string) => string;
+  // Sinh ma giam thi moi (doi ma sau moi lan cho lam lai)
+  generateCode?: () => string;
 }
 
 interface Target {
@@ -47,9 +50,11 @@ export class ProctorService {
   private readonly attempts: AttemptService;
   private readonly limiter: RateLimiter;
   private readonly sebQuitUrl?: (examId: number, origin: string) => string;
+  private readonly generateCode: () => string;
 
-  constructor({ config, exams, events, attempts, limiter, sebQuitUrl }: ProctorServiceDeps) {
+  constructor({ config, exams, events, attempts, limiter, sebQuitUrl, generateCode = generateProctorCode }: ProctorServiceDeps) {
     this.sebQuitUrl = sebQuitUrl;
+    this.generateCode = generateCode;
     this.config = config;
     this.exams = exams;
     this.events = events;
@@ -69,6 +74,7 @@ export class ProctorService {
   }
 
   // Cho thi sinh lam them 1 luot. payload: { password, student_name, exam_id }
+  // Dung xong ma giam thi TU DOI (ma dung 1 lan cho viec lam lai): ai nhin trom ma cung khong dung lai duoc.
   async grantRetake(payload: UntrustedBody, clientIp: string): Promise<{ ok: true; attempt: number }> {
     const target = await this.target(payload, clientIp);
     if (!target.exam) throw new ValidationError("Thiếu mã đề.");
@@ -80,7 +86,17 @@ export class ProctorService {
 
     await this.verify(target, payload.password, "CHO_LAM_LAI");
     const attempt = status.allowed + 1;
-    await this.events.create({ ...target.base, type: "CHO_LAM_LAI", detail: `Giám thị cho làm lại: lượt thứ ${attempt}.`, action_logs: [] });
+    if (target.exam.proctor_code) {
+      let code = this.generateCode();
+      if (code === target.exam.proctor_code) code = this.generateCode();
+      await this.exams.setProctorCode(target.exam.id, code);
+    }
+    await this.events.create({
+      ...target.base,
+      type: "CHO_LAM_LAI",
+      detail: `Giám thị cho làm lại: lượt thứ ${attempt}.${target.exam.proctor_code ? " Mã giám thị của đề đã tự đổi (xem mã mới ở nút chìa khoá)." : ""}`,
+      action_logs: []
+    });
     return { ok: true, attempt };
   }
 

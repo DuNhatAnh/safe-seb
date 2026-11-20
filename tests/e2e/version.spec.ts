@@ -19,10 +19,10 @@ test("trang đăng nhập / làm bài / admin hiện phiên bản", async ({ pag
   await expect(page.locator(".app-version")).toHaveText(`Phiên bản ${VERSION} · dev`);
 });
 
-test("trong app Android: hiện thêm phiên bản app (số bản build)", async ({ page }) => {
+test("trong app Android: hiện thêm phiên bản app", async ({ page }) => {
   await page.addInitScript(() => {
-    Object.assign(window, { KioskBridge: { startLock() { }, stopLock() { }, appVersion: () => "1 (bản 12)" } });
+    Object.assign(window, { KioskBridge: { startLock() { }, stopLock() { }, appVersion: () => "v1.1" } });
   });
   await page.goto("/index.html");
-  await expect(page.locator(".app-version")).toHaveText(`Phiên bản ${VERSION} · dev · App 1 (bản 12)`);
+  await expect(page.locator(".app-version")).toHaveText(`Phiên bản ${VERSION} · dev · App v1.1`);
 });

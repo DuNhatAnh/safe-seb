@@ -51,7 +51,9 @@ function resolvePublicFile(urlPath: string): string | null {
 
 const server = http.createServer((req, res) => {
   const urlPath = (req.url ?? "/").split("?")[0];
-  if (urlPath.startsWith("/api/")) { void handleApi(req, res); return; }
+  // Link ngan tai app Android: /tai-app = /api/app-download
+  if (urlPath === "/tai-app") req.url = "/api/app-download";
+  if (urlPath.startsWith("/api/") || urlPath === "/tai-app") { void handleApi(req, res); return; }
 
   const file = resolvePublicFile(urlPath);
   if (!file) return sendText(res, 403, "403 Forbidden");

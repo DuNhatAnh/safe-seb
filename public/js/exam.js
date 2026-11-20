@@ -128,10 +128,11 @@ function goToQuestion(index) {
 const PAGE_SIZE = 3;
 let examQuery = { q: "", page: 1 };
 let historyPage = 1;
+let historyExam = null;    // { id, title } de dang xem lich su (modal)
 let examSearchTimer = null;
 
 function loadAssignedExams() {
-  return Promise.all([loadExamPage(examQuery.page), loadHistoryPage(historyPage)]);
+  return loadExamPage(examQuery.page);
 }
 
 function onExamSearch(value) {
@@ -187,7 +188,10 @@ function examCardHtml(exam) {
       </div>`;
   } else if (done) {
     status = `<span class="badge badge-green">Đã nộp · ${scoreText(done)}</span>`;
-    action = `<button class="btn btn-outline" onclick="startExam(${exam.id})">Làm lại</button>`;
+    action = `<div class="exam-card-action">
+        <button class="btn btn-outline" onclick="openExamHistory(${exam.id})">Lịch sử</button>
+        <button class="btn btn-outline" onclick="startExam(${exam.id})">Làm lại</button>
+      </div>`;
   } else if (expired) {
     status = `<span class="badge badge-red">Đã hết giờ, chưa nộp</span>`;
     action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Nộp bài</button>`;
@@ -196,6 +200,7 @@ function examCardHtml(exam) {
     action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Tiếp tục làm bài</button>`;
   }
   if (exam.require_password && !done) status += ` <span class="badge badge-blue">Cần mật khẩu</span>`;
+  examTitles[exam.id] = exam.title;
   return `
     <div class="card exam-card">
       <div class="exam-card-info">
@@ -206,6 +211,24 @@ function examCardHtml(exam) {
     </div>`;
 }
 
+// Ten de dang hien tren trang (tieu de modal lich su)
+const examTitles = {};
+
+// Lich su lam bai cua 1 de: modal, phan trang phia server (3 lan / trang, moi nhat truoc)
+function openExamHistory(examId) {
+  historyExam = { id: examId, title: examTitles[examId] || `Đề #${examId}` };
+  document.getElementById("historyTitle").textContent = `Lịch sử · ${historyExam.title}`;
+  document.getElementById("historyContainer").innerHTML = '<p class="field-hint">Đang tải...</p>';
+  document.getElementById("historyPager").innerHTML = "";
+  document.getElementById("historyModal").style.display = "flex";
+  loadHistoryPage(1);
+}
+
+function closeExamHistory() {
+  document.getElementById("historyModal").style.display = "none";
+  historyExam = null;
+}
+
 // Diem hien thi: con cau giao vien cham -> ghi chu "cho cham"
 function scoreText(r) {
   const pending = r.pending || 0;
@@ -214,11 +237,12 @@ function scoreText(r) {
 
 async function loadHistoryPage(page) {
   historyPage = page;
+  if (!historyExam) return;
   const box = document.getElementById("historyContainer");
   const pager = document.getElementById("historyPager");
   let data;
   try {
-    data = await StudentApi.history(currentStudent, page, PAGE_SIZE);
+    data = await StudentApi.history(currentStudent, page, PAGE_SIZE, historyExam.id);
   } catch (err) {
     console.warn("Khong tai duoc lich su lam bai:", err.message);
     pager.innerHTML = "";
@@ -228,17 +252,17 @@ async function loadHistoryPage(page) {
   if (!data.items.length && data.total && page > 1) return loadHistoryPage(Math.ceil(data.total / data.size));
   pager.innerHTML = pagerHtml(data, "loadHistoryPage");
   if (!data.items.length) {
-    box.innerHTML = '<p class="field-hint">Bạn chưa nộp bài thi nào.</p>';
+    box.innerHTML = '<p class="field-hint">Bạn chưa nộp đề này lần nào.</p>';
     return;
   }
   box.innerHTML = `
     <div class="table-responsive">
       <table class="wrap-table">
-        <thead><tr><th>Đề thi</th><th>Điểm</th><th>Thời lượng</th><th>Nộp lúc</th></tr></thead>
+        <thead><tr><th>Lần</th><th>Điểm</th><th>Thời lượng</th><th>Nộp lúc</th></tr></thead>
         <tbody>
-          ${data.items.map(r => `
+          ${data.items.map((r, i) => `
             <tr>
-              <td>${escapeHtml(r.exam_title || (r.exam_id ? `Đề #${r.exam_id} (đã xoá)` : "--"))}</td>
+              <td>${data.total - (data.page - 1) * data.size - i}</td>
               <td><strong>${scoreText(r)}</strong></td>
               <td>${r.duration_minutes || "--"} phút</td>
               <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleString("vi-VN") : "--"}</td>
@@ -541,7 +565,9 @@ function exitAfterSubmit() {
 }
 
 // Sau khi nop: xem lich su
-function backToList() {
+// showHistory: nut "Xem lich su lam bai" sau khi nop -> mo lich su cua de vua nop
+function backToList(showHistory = false) {
+  const justDone = currentExam;
   currentExam = null;
   document.getElementById("viewLockScreen").style.display = "none";
   document.getElementById("viewExamPlay").style.display = "none";
@@ -549,7 +575,10 @@ function backToList() {
   document.getElementById("btnLogout").style.display = "";
   document.getElementById("headerTitle").textContent = "Safe Exam";
   loadAssignedExams();
-  document.getElementById("historySection").scrollIntoView({ behavior: "smooth" });
+  if (showHistory && justDone) {
+    examTitles[justDone.id] = justDone.title;
+    openExamHistory(justDone.id);
+  }
 }
 
 // 4. Giam thi nhap MA 6 SO CUA DE (admin xem o trang quan tri). Moi lan nhap deu ghi log len admin (exam_events)

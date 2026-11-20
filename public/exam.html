@@ -31,11 +31,6 @@
       </div>
       <div id="examPager"></div>
 
-      <div id="historySection" class="card" style="margin-top: 20px;">
-        <h3 style="margin-bottom: 10px;">Lịch sử làm bài</h3>
-        <div id="historyContainer"><p class="field-hint">Đang tải...</p></div>
-        <div id="historyPager"></div>
-      </div>
     </div>
 
     <!-- Man hinh 2: Giao dien lam bai -->
@@ -82,8 +77,20 @@
         Bài đã được lưu. Bạn có thể xem lịch sử làm bài hoặc thoát.
       </div>
 
-      <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="backToList()">Xem lịch sử làm bài</button>
+      <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="backToList(true)">Xem lịch sử làm bài</button>
       <button id="btnExitAfterSubmit" class="btn btn-outline btn-block" onclick="exitAfterSubmit()">Thoát</button>
+    </div>
+  </div>
+
+  <!-- Lich su lam bai cua 1 de (nut "Lich su" tren the de) -->
+  <div id="historyModal" class="overlay" style="display: none; z-index: 120;">
+    <div class="lock-screen modal-wide" style="max-width: 620px; text-align: left;">
+      <div class="modal-head">
+        <h3 id="historyTitle" class="history-title">Lịch sử làm bài</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeExamHistory()">Đóng</button>
+      </div>
+      <div id="historyContainer"></div>
+      <div id="historyPager"></div>
     </div>
   </div>
 

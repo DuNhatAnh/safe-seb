@@ -40,10 +40,9 @@ Triển khai Vercel: khai báo đủ 5 biến trong `.env.example` ở Project S
 
 ### Phiên bản
 
-Phiên bản nằm trong file **`VERSION`** (hiện là `1`). Ra bản mới: sửa thành `2`, `3`... rồi push.
-- Cuối mọi trang hiện **"Phiên bản 1 · a1b2c3d"** (mã commit Vercel đang chạy).
-- Trong app Android hiện thêm **"App 1 (bản 12)"**: *bản 12* = lần build thứ 12 trên GitHub (tự tăng), nhìn là biết điện thoại đã cài bản mới chưa.
-- Sửa phần web: chỉ cần push, mở lại app là có bản mới. Sửa code `android/` hoặc `VERSION`: GitHub build app mới, học sinh **gỡ app cũ rồi cài lại**.
+Dạng **LỚN.NHỎ** trong file **`VERSION`** (hiện `1.1`): **cập nhật nhỏ** (sửa lỗi, thêm / chỉnh chức năng) → `1.1`, `1.2`...; **cập nhật lớn** (đổi cách thi / đăng nhập, bắt buộc làm lại) → `2.0`.
+Tăng bằng `npm run version:small` / `npm run version:big`; quy tắc và nội dung từng bản ghi trong [CHANGELOG.md](CHANGELOG.md).
+Hiện ở cuối mọi trang ("Phiên bản 1.1 · mã commit"), trong app ("App v1.1"), tên file tải app (`safe-exam-v1.1.apk`, link ngắn **/tai-app**).
 
 ### App Android (cài về máy rồi làm bài)
 

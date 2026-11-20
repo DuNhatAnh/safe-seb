@@ -30,9 +30,9 @@ class KioskBridge(private val activity: Activity) {
         }
     }
 
-    /** Phien ban app, hien o cuoi trang: "1 (bản 12)" = phien ban 1, lan build thu 12 tren GitHub. */
+    /** Phien ban app, hien o cuoi trang: "v1.1" (file VERSION luc build). */
     @JavascriptInterface
-    fun appVersion(): String = "${BuildConfig.VERSION_NAME} (bản ${BuildConfig.VERSION_CODE})"
+    fun appVersion(): String = "v${BuildConfig.VERSION_NAME}"
 
     /** Trang dang nhap hien nut "Go khoa thiet bi" khi app dang la Device Owner. */
     @JavascriptInterface

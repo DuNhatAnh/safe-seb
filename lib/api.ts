@@ -15,6 +15,7 @@ import { ExamRepository } from "./repositories/ExamRepository.ts";
 import { ResultRepository } from "./repositories/ResultRepository.ts";
 import { RateLimiter } from "./security/RateLimiter.ts";
 import { AdminDataService } from "./services/AdminDataService.ts";
+import { AppDownloadService } from "./services/AppDownloadService.ts";
 import { AttemptService } from "./services/AttemptService.ts";
 import { AuthService } from "./services/AuthService.ts";
 import { EntryPasswordService } from "./services/EntryPasswordService.ts";
@@ -53,7 +54,8 @@ export function createApi({ config = new Config(), fetchImpl }: CreateApiOptions
   const adminDataService = new AdminDataService({ db });
 
   const router = new Router();
-  new StudentController({ examService, submissionService, proctorService, sebConfigService }).register(router);
+  const appDownloadService = new AppDownloadService({ repo: process.env.APP_RELEASE_REPO || undefined });
+  new StudentController({ examService, submissionService, proctorService, sebConfigService, appDownloadService }).register(router);
   new AdminController({ authService, adminDataService, proctorCodeService, sebConfigService, entryPasswordService }).register(router);
   return router;
 }

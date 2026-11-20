@@ -22,10 +22,17 @@ export interface RouteContext {
 export class RawResponse {
   readonly body: string;
   readonly headers: Record<string, string>;
+  readonly status: number;
 
-  constructor(body: string, headers: Record<string, string>) {
+  constructor(body: string, headers: Record<string, string>, status = 200) {
     this.body = body;
     this.headers = headers;
+    this.status = status;
+  }
+
+  // Chuyen huong trinh duyet toi url khac (302)
+  static redirect(url: string): RawResponse {
+    return new RawResponse("", { Location: url }, 302);
   }
 }
 
@@ -53,7 +60,7 @@ export class Router {
       const ctx: RouteContext = { req, query: url.searchParams, body, ip: Router.clientIp(req), client: Router.clientInfo(req) };
       const result = await handler(ctx);
       if (result instanceof RawResponse) {
-        res.writeHead(200, { "Cache-Control": "no-store", ...result.headers });
+        res.writeHead(result.status, { "Cache-Control": "no-store", ...result.headers });
         res.end(result.body);
         return;
       }

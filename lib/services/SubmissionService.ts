@@ -4,7 +4,7 @@ import type { ResultStore } from "../repositories/ResultRepository.ts";
 import type { AttemptService } from "./AttemptService.ts";
 import type { ClientInfo, ResultSummaryRow, UntrustedBody } from "../types.ts";
 import type { Page } from "../infra/database/Database.ts";
-import { cleanLogs, cleanString } from "../utils/input.ts";
+import { cleanLogs, cleanString, isId } from "../utils/input.ts";
 import { parsePage } from "../utils/paging.ts";
 import type { ExamService } from "./ExamService.ts";
 import type { GradingService } from "./GradingService.ts";
@@ -68,11 +68,13 @@ export class SubmissionService {
   }
 
   // 1 trang lich su lam bai (mac dinh 3 bai / trang, moi nhat truoc)
-  async history(studentName: unknown, page?: unknown, size?: unknown): Promise<Page<ResultSummary & { exam_id: number | null; exam_title: string | null }>> {
+  // examId: chi lich su cua 1 de (modal "Lich su" tren the de)
+  async history(studentName: unknown, page?: unknown, size?: unknown, examId?: unknown): Promise<Page<ResultSummary & { exam_id: number | null; exam_title: string | null }>> {
     const student = cleanString(studentName);
     if (!student) throw new ValidationError("Thiếu tên thí sinh.");
     const req = parsePage(page, size);
-    const { items, total } = await this.results.pageByStudent(student, req.offset, req.size);
+    const exam = isId(examId) ? Number(examId) : undefined;
+    const { items, total } = await this.results.pageByStudent(student, req.offset, req.size, exam);
     const titles = await this.examService.titles(items.flatMap(r => (r.exam_id === null ? [] : [Number(r.exam_id)])));
     return {
       items: items.map(r => ({ exam_id: r.exam_id, exam_title: r.exam_id === null ? null : titles.get(Number(r.exam_id)) ?? null, ...this.summaryOf(r) })),

@@ -7,6 +7,7 @@
     }
   },
   "rewrites": [
+    { "source": "/tai-app", "destination": "/api/index?path=app-download" },
     { "source": "/api/(.*)", "destination": "/api/index?path=$1" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ]

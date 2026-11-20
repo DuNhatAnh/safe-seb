@@ -11,6 +11,9 @@ import { AttemptService } from "../lib/services/AttemptService.ts";
 import { ProctorCodeService } from "../lib/services/ProctorCodeService.ts";
 import { SebConfigService } from "../lib/services/SebConfigService.ts";
 import { EntryPasswordService } from "../lib/services/EntryPasswordService.ts";
+import { AppDownloadService } from "../lib/services/AppDownloadService.ts";
+import { bump, VERSION_PATTERN } from "../scripts/bump-version.ts";
+import { APP_VERSION } from "../lib/version.ts";
 import crypto from "node:crypto";
 import { AuthService } from "../lib/services/AuthService.ts";
 import { AdminDataService } from "../lib/services/AdminDataService.ts";
@@ -431,4 +434,54 @@ test("SupabaseDatabase: phân trang, đếm, tìm kiếm, lọc IN / khoảng th
     "GET exam_results?student_name=eq.an&exam_id=in.(1,2)&submitted_at=gte.2026-11-20&submitted_at=lt.2026-11-21&select=id count=exact",
     'GET exam_results?student_name=in.("A \\"B\\"","C,D")&select=*'
   ]);
+});
+
+test("link tải app: chuyển tới file .apk mới nhất có tên kèm phiên bản; GitHub lỗi thì dùng link cố định; cache 5 phút", async () => {
+  let calls = 0;
+  let now = 0;
+  let healthy = true;
+  const fakeFetch = (async () => {
+    calls++;
+    if (!healthy) throw new Error("mat mang");
+    return new Response(JSON.stringify({ assets: [
+      { name: "safe-exam.apk", browser_download_url: "https://x/safe-exam.apk", updated_at: "2026-11-20T09:00:00Z" },
+      { name: "safe-exam-v1.0.apk", browser_download_url: "https://x/safe-exam-v1.0.apk", updated_at: "2026-11-20T07:00:00Z" },
+      { name: "safe-exam-v1.1.apk", browser_download_url: "https://x/safe-exam-v1.1.apk", updated_at: "2026-11-20T08:00:00Z" }
+    ] }), { status: 200 });
+  }) as unknown as typeof fetch;
+  const svc = new AppDownloadService({ repo: "chu/repo", fetchImpl: fakeFetch, now: () => now });
+  assert.equal(await svc.latestUrl(), "https://x/safe-exam-v1.1.apk");
+  now += 60_000;
+  assert.equal(await svc.latestUrl(), "https://x/safe-exam-v1.1.apk");
+  assert.equal(calls, 1); // con trong 5 phut: khong hoi lai GitHub
+  healthy = false;
+  now += 10 * 60_000;
+  assert.equal(await svc.latestUrl(), "https://github.com/chu/repo/releases/download/apk-latest/safe-exam.apk");
+});
+
+test("phiên bản: dạng LỚN.NHỎ; nhỏ 1.0 → 1.1, lớn 1.5 → 2.0", () => {
+  assert.match(APP_VERSION, VERSION_PATTERN, "file VERSION phai dang LON.NHO (vd 1.1)");
+  assert.equal(bump("1.0", "small"), "1.1");
+  assert.equal(bump("1.9", "small"), "1.10");
+  assert.equal(bump("1.5", "big"), "2.0");
+  assert.throws(() => bump("1", "small"), /LỚN.NHỎ/);
+});
+
+test("cho làm lại xong: mã giám thị tự đổi, mã cũ hết hiệu lực", async () => {
+  const { submissions, proctor, examRow } = setup();
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
+  await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: CODE }, "ip");
+  const fresh = String(examRow(1)?.proctor_code);
+  assert.match(fresh, /^\d{6}$/);
+  assert.notEqual(fresh, CODE);
+  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: CODE }, "ip2"), (e: AppError) => e.status === 401);
+  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: fresh }, "ip3"), { ok: true });
+});
+
+test("lịch sử theo đề: chỉ các lần làm của đề đó", async () => {
+  const { submissions, db } = setup();
+  for (const exam_id of [1, 1, 2]) await db.insert("exam_results", { exam_id, student_name: "an", score: exam_id, answers: [], submitted_at: null });
+  assert.equal((await submissions.history("an", 1, 3, 1)).total, 2);
+  assert.equal((await submissions.history("an", 1, 3, "2")).total, 1);
+  assert.equal((await submissions.history("an")).total, 3);
 });

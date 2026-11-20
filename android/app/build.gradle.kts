@@ -11,10 +11,12 @@ android {
         applicationId = "com.safe.exam"
         minSdk = 26
         targetSdk = 34
-        // Phien ban = file VERSION o thu muc goc du an; so ban build (versionCode) do GitHub Actions truyen vao
-        // (so lan build, tu tang -> dien thoai biet day la ban moi hon)
-        versionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 1
-        versionName = rootProject.file("../VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "1"
+        // Phien ban = file VERSION o thu muc goc du an, dang LON.NHO (vd 1.0, 1.1, 2.0 - xem CHANGELOG.md).
+        // versionCode (Android dung de biet ban nao moi hon) suy ra tu phien ban: 1.1 -> 1001, 2.0 -> 2000
+        val appVersion = rootProject.file("../VERSION").takeIf { it.exists() }?.readText()?.trim() ?: "1.0"
+        val (major, minor) = appVersion.split(".").map { it.toIntOrNull() ?: 0 } + listOf(0, 0)
+        versionName = appVersion
+        versionCode = major * 1000 + minor
 
         // Dia chi trang dang nhap: dat safeExamUrl trong android/gradle.properties
         // (hoac build: gradlew assembleDebug -PsafeExamUrl=https://...)
