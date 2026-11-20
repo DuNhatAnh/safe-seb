@@ -39,17 +39,19 @@ export function createApi({ config = new Config(), fetchImpl }: CreateApiOptions
   const events = new EventRepository(db);
 
   const grading = new GradingService();
-  const attempts = new AttemptService({ results, events });
-  const entryPasswordService = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter() });
+  const attempts = new AttemptService({ results, events, ticketSecret: () => config.sessionSecret });
+  // 1 mat khau chung cho moi de -> them gioi han theo may (IP) dung chung cho moi cho nhap mat khau.
+  // Nguong cao + chi dem sai trong 10 phut + nhap dung la xoa dem, vi ca truong co the chung 1 IP (wifi).
+  const passwordIpLimiter = new RateLimiter({ maxFails: 30, lockMs: 10 * 60 * 1000, windowMs: 10 * 60 * 1000 });
+  const entryPasswordService = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter(), ipLimiter: passwordIpLimiter });
   const examService = new ExamService({ exams, attempts, grading, entryPasswords: entryPasswordService, results });
   const sebQuitUrlOf = (examId: number, origin: string): string => sebConfigService.quitUrl(examId, origin);
   const submissionService = new SubmissionService({ examService, results, attempts, grading, sebQuitUrl: sebQuitUrlOf });
   const sebConfigService = new SebConfigService({ config, exams });
   const proctorService = new ProctorService({
-    config, exams, events, attempts, limiter: new RateLimiter(),
-    sebQuitUrl: (examId, origin) => sebConfigService.quitUrl(examId, origin)
+    config, exams, events, attempts, limiter: new RateLimiter(), ipLimiter: passwordIpLimiter
   });
-  const proctorCodeService = new ProctorCodeService({ exams });
+  const proctorCodeService = new ProctorCodeService({ config, exams });
   const authService = new AuthService({ config, limiter: new RateLimiter() });
   const adminDataService = new AdminDataService({ db });
 

@@ -36,17 +36,16 @@ export class AdminController {
         this.authService.assertAdmin(req.headers.authorization);
         return this.adminDataService.query(body);
       })
-      // Xem ma giam thi 6 so cua de; regenerate=true -> doi ma moi
+      // Xem mat khau de: ma rieng 6 so cua de + mat khau chung; regenerate=true -> doi ma rieng
       .post("admin/proctor-code", ({ req, body }) => {
         this.authService.assertAdmin(req.headers.authorization);
         return this.proctorCodeService.getCode(body.exam_id, body.regenerate === true);
       })
-      // Mat khau vao de: { exam_id, enabled?: boolean, regenerate?: true }
+      // Bat / tat mat khau vao de: { exam_id, enabled?: boolean }
       .post("admin/entry-password", ({ req, body }) => {
         this.authService.assertAdmin(req.headers.authorization);
         return this.entryPasswordService.settings(body.exam_id, {
-          enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-          regenerate: body.regenerate === true
+          enabled: typeof body.enabled === "boolean" ? body.enabled : undefined
         });
       })
       // Cai dat SEB cua de: { exam_id, require_seb?: boolean, regenerate_password?: true }

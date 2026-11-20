@@ -27,7 +27,7 @@ export interface SubmitResult {
   autoMax: number;
   pending: number;
   duration_minutes: number;
-  seb_quit_url?: string; // dang chay trong SEB: trang thoat SEB (nop xong thoat khong can ma)
+  seb_quit_url?: string; // dang chay trong SEB: trang thoat SEB (nut "Thoat Safe Exam Browser" sau khi nop)
 }
 
 export interface SubmissionServiceDeps {
@@ -82,7 +82,7 @@ export class SubmissionService {
     };
   }
 
-  // payload: { exam_id, student_name, answers: {[index]: gia tri}, duration_minutes, action_logs }
+  // payload: { exam_id, student_name, answers: {[index]: gia tri}, duration_minutes, action_logs, submission_key, attempt_ticket }
   async submit(payload: UntrustedBody, client?: ClientInfo): Promise<SubmitResult> {
     const student = cleanString(payload.student_name);
     if (!student) throw new ValidationError("Thiếu tên thí sinh.");
@@ -91,13 +91,22 @@ export class SubmissionService {
     // De co mat khau: phai kem ve vao de server cap khi lay de
     this.examService.entryPasswords?.assertToken(exam, student, payload.entry_token);
     const questions = exam.questions ?? [];
+    const quit = client?.isSeb && this.sebQuitUrl ? this.sebQuitUrl(exam.id, client.origin) : undefined;
+    const alreadySaved = (row: ResultSummaryRow): ConflictError => {
+      const { earned, total, autoMax } = this.grading.summarize(row.answers);
+      return new ConflictError("Bài thi này đã được nộp.", { result: { ...this.summaryOf(row), earned, total, autoMax, ...(quit ? { seb_quit_url: quit } : {}) } });
+    };
 
-    // Het luot: thuong la lan nop truoc da luu nhung mat phan hoi (mat mang) -> tra lai ket qua gan nhat
-    const { canStart, latest: existing } = await this.attempts.status(exam.id, student);
-    if (!canStart && existing) {
-      const { earned, total, autoMax } = this.grading.summarize(existing.answers);
-      throw new ConflictError("Bài thi này đã được nộp.", { result: { ...this.summaryOf(existing), earned, total, autoMax } });
+    // Luot nay da nop (mat phan hoi roi bam "Thu nop lai") -> tra lai ket qua da luu, khong tao ban ghi moi
+    const key = cleanString(payload.submission_key, 64) || null;
+    if (key) {
+      const same = await this.results.findBySubmissionKey(exam.id, student, key);
+      if (same) throw alreadySaved(same);
     }
+    // Het luot: luot dang lam da duoc vao (ve luot hop le, vd admin vua tat allow_retake) -> van nhan bai.
+    // Khong co ve hop le: thuong la lan nop truoc da luu nhung mat phan hoi (client cu) -> tra lai ket qua gan nhat
+    const { canStart, used, latest: existing } = await this.attempts.status(exam, student);
+    if (!canStart && existing && !this.attempts.isValidTicket(exam.id, student, used, payload.attempt_ticket)) throw alreadySaved(existing);
 
     const { entries, earned, total, autoMax, pending, score } = this.grading.grade(questions, payload.answers);
     const duration = this.clampDuration(payload.duration_minutes, exam.duration_minutes);
@@ -109,9 +118,9 @@ export class SubmissionService {
       duration_minutes: duration,
       answers: entries,
       action_logs: cleanLogs(payload.action_logs),
-      submitted_at: this.now().toISOString()
+      submitted_at: this.now().toISOString(),
+      submission_key: key
     });
-    const quit = client?.isSeb && this.sebQuitUrl ? this.sebQuitUrl(exam.id, client.origin) : undefined;
     return { id: saved.id, score, earned, total, autoMax, pending, duration_minutes: duration, ...(quit ? { seb_quit_url: quit } : {}) };
   }
 

@@ -90,7 +90,7 @@ Giao diện quản trị hoạt động trên máy tính của giám thị (`adm
 - Thí sinh nhận đề đã lọc đáp án (`GradingService.sanitizeQuestion`: bỏ `is_correct`, `is_true`, `answer`, `answers`, `solution`; câu tự luận chỉ kèm cờ `numeric`).
 - Server chấm bằng chính registry `question-types.js` (`GradingService` nạp vào vm), bỏ qua mọi điểm số client gửi. Thời lượng bị giới hạn tối đa bằng thời gian đề + 1 phút.
 - Mỗi thí sinh chỉ nộp 1 lần mỗi đề: nộp lại trả 409 kèm kết quả cũ (dùng khi lần trước đã lưu nhưng mất phản hồi).
-- Mật khẩu giám thị (`PROCTOR_PASSWORD`) kiểm tra ở `/api/proctor-exit`; đúng hay sai đều ghi `exam_events`. Sai 5 lần tạm khoá 5 phút. Không có mạng thì không thoát được.
+- Mật khẩu đề (mật khẩu chung `PROCTOR_PASSWORD` hoặc mật khẩu riêng của đề, xem 3.4b) kiểm tra ở `/api/proctor-exit`; đúng hay sai đều ghi `exam_events`. Sai 5 lần tạm khoá 5 phút. Không có mạng thì không thoát được.
 
 | Route | Quyền | Việc |
 |---|---|---|
@@ -142,30 +142,42 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
    - Nếu Supabase xác nhận lưu thành công (HTTP 201/200): Xóa bộ nhớ tạm và chuyển sang màn hình Khóa an toàn.
 5. Màn hình kết quả:
    - Hiển thị điểm số và thông báo bài thi đã nộp thành công. Thiết bị vẫn ở chế độ Kiosk.
-   - Nút **Xem lịch sử làm bài** (không cần mật khẩu) quay về danh sách đề.
-   - Nút **Thoát ứng dụng (Giám thị)** cần mật khẩu giám thị, ghi sự cố `THOAT_UNG_DUNG` lên `exam_events`.
+   - Chỉ có 2 nút (không có nút thoát): **Xem lịch sử làm bài** và **Về trang đề thi**, đều không cần mật khẩu.
+   - Riêng khi chạy trong Safe Exam Browser: thêm nút **Thoát Safe Exam Browser** (server trả `seb_quit_url` khi nộp) → SEB tự đóng.
+   - App Android: nộp xong thì bỏ ghim màn hình. Đóng app: màn đăng nhập › **Thoát ứng dụng (Quản trị)** (mật khẩu quản trị).
+   - Chống nộp trùng: mỗi lượt làm bài có khoá ngẫu nhiên (`submission_key`, lưu ở trình duyệt, gửi kèm khi nộp). Mất phản hồi rồi bấm "Thử nộp lại" cùng khoá → server trả lại kết quả đã lưu (409 kèm `result`), không tạo bản ghi mới.
 
 ### 3.4. Lịch sử làm bài và điều kiện nộp
 - Màn danh sách đề có mục **Lịch sử làm bài** (đề, điểm, chờ chấm tự luận, thời lượng, thời điểm nộp) lấy từ `exam_results` theo tên thí sinh.
-- Mỗi đề 1 lượt (làm lại cần mã giám thị, xem 3.4b): đề đã nộp hiện "Đã nộp · điểm" + nút "Làm lại", đề làm dở hiện "Tiếp tục làm bài", bản nháp quá hạn hiện "Nộp bài" và tự nộp khi mở.
+- Mặc định mỗi đề 1 lượt (làm lại cần mật khẩu đề, xem 3.4b; đề bật "Cho làm lại nhiều lần" thì không cần): đề đã nộp hiện "Đã nộp · điểm" + nút "Làm lại", đề làm dở hiện "Tiếp tục làm bài", bản nháp quá hạn hiện "Nộp bài" và tự nộp khi mở.
+- Thanh tiêu đề trang thí sinh có nút **Tải lại** (chỉ hiện ở danh sách đề): tải lại danh sách, giữ trang và ô tìm kiếm đang dùng.
+- Sau mỗi lần đăng nhập, trang đề thi hiện 1 lời nhắn (modal có nút **Đóng**); trang đăng nhập đặt cờ `sessionStorage.welcomePending`, trang đề thi hiện 1 lần rồi xoá cờ (tải lại trang không hiện lại).
 - Nút **Nộp bài** chỉ bật khi đã trả lời đủ mọi câu (trừ câu tự luận làm trên giấy). Hết giờ thì tự nộp bất kể.
 
-### 3.4b. Mã giám thị 6 số của đề và làm lại
-- Mỗi đề có **mã giám thị 6 số ngẫu nhiên** (`exams.proctor_code`), server tự gắn khi xuất bản (`crypto.randomInt`). Thí sinh không bao giờ nhận được mã.
-- Trang admin, danh sách đề: nút biểu tượng chìa khoá → xem mã, sao chép, **Đổi mã mới** (mã cũ hết hiệu lực ngay). Đề cũ chưa có mã được tạo mã khi bấm xem.
-- Mã dùng cho: thoát khẩn cấp, thoát ứng dụng sau khi nộp, **cho làm lại**. Đề chưa có mã thì chấp nhận `PROCTOR_PASSWORD` (.env); đề đã có mã thì chỉ nhận mã của đề.
-- Làm lại: mỗi thí sinh được 1 lượt/đề. Đề đã nộp hiện nút **Làm lại** → giám thị nhập mã → server ghi `CHO_LAM_LAI` và cấp thêm 1 lượt (số lượt = 1 + số lần `CHO_LAM_LAI`). Mỗi lượt là một bài nộp riêng trong `exam_results`, lịch sử hiện đủ các lần.
-- Mọi lần nhập mã (đúng/sai) ghi vào `exam_events`; sai 5 lần tạm khoá 5 phút.
+### 3.4b. Mật khẩu đề và làm lại
+- **Mọi ô nhập mật khẩu** (vào đề nếu bật, cho làm lại, mở khoá bài, thoát khẩn cấp) nhận **một trong hai** (`lib/security/examPassword.ts`):
+  - **Mật khẩu chung (mặc định) của mọi đề**: biến môi trường `PROCTOR_PASSWORD`. Đổi bằng cách sửa biến môi trường; chỉ đổi khi không có ca thi (vé vào đề cũ hết hiệu lực).
+  - **Mật khẩu riêng 6 số của đề** (`exams.proctor_code`): server tự gắn khi xuất bản (`crypto.randomInt`). Mật khẩu riêng của đề khác không dùng được.
+- Thí sinh không bao giờ nhận được 2 mật khẩu này (đề gửi về trình duyệt không có `proctor_code`).
+- Trang admin, danh sách đề: nút chìa khoá → xem / sao chép mật khẩu riêng, **Đổi mật khẩu riêng** (mật khẩu riêng cũ hết hiệu lực ngay), xem mật khẩu chung. Đề cũ chưa có mật khẩu riêng được tạo khi bấm xem.
+- Làm lại (mặc định): mỗi thí sinh 1 lượt/đề. Đề đã nộp hiện nút **Làm lại** → giám thị nhập mật khẩu đề → server ghi `CHO_LAM_LAI` kèm `attempt` = số lần đã nộp + 1 (mở **đúng 1 lượt** tính từ số lần đã nộp). Số lượt được phép = max(1 + số lần `CHO_LAM_LAI`, `attempt` lớn nhất); sự cố cũ không có `attempt` vẫn tính +1 lượt. Mật khẩu đề không tự đổi sau khi cho làm lại.
+- **Cho làm lại nhiều lần** (nút chìa khoá, `exams.allow_retake`, mặc định tắt): bật thì thí sinh bấm "Làm lại" là vào làm ngay, không cần mật khẩu, không giới hạn số lần. Tắt lại thì về mặc định; thí sinh đã làm nhiều lượt muốn làm tiếp thì giám thị nhập mật khẩu → mở thêm đúng 1 lượt.
+- **Vé lượt** (`attempt_ticket` = HMAC(đề, thí sinh, số lần đã nộp), trình duyệt lưu và gửi lại qua header `X-Exam-Attempt` / khi nộp): thí sinh đã được vào lượt nào thì tải lại trang / nộp lượt đó được dù admin đổi cài đặt giữa chừng (vd tắt "làm lại nhiều lần"). Nộp xong số lần đã nộp tăng → vé hết hạn.
+- Bấm "cho làm lại" 2 lần cùng lúc: cùng ghi 1 số lượt → chỉ mở 1 lượt.
+- Bản nháp trên máy đã được nộp (mất phản hồi): khi vào lại, trình duyệt gửi khoá chống nộp trùng (`X-Exam-Submission`); server thấy đã có bài nộp với khoá đó → trả `draft_submitted` → trình duyệt bỏ bản nháp, làm lượt mới.
+- Mỗi lượt là một bài nộp riêng trong `exam_results`, lịch sử hiện đủ các lần.
+- Mọi lần nhập mật khẩu (đúng/sai) ghi vào `exam_events`. Chống dò: sai 5 lần / thí sinh tạm khoá 5 phút; thêm giới hạn theo máy (IP) dùng chung cho mọi ô nhập mật khẩu: sai 30 lần trong 10 phút (các lần sai cách nhau quá 10 phút thì đếm lại) khoá 10 phút; nhập đúng thì xoá đếm của IP đó (ngưỡng cao vì cả trường có thể chung 1 IP wifi).
 
 ### 3.4c. Mật khẩu vào đề (mặc định tắt)
-- Admin: nút chìa khoá của đề → mục **Mật khẩu vào đề**: bật/tắt (`exams.require_password`, mặc định `false`), xem / sao chép / đổi mật khẩu 6 số (`exams.entry_password`).
-- Mật khẩu vào đề **khác mã giám thị**: giám thị đọc to cho cả phòng mà không lộ mã dùng để thoát / mở khoá / cho làm lại.
-- Bật: `GET /api/exam` cần header `X-Exam-Password` (lần đầu) hoặc `X-Exam-Entry` (vé vào đề server cấp khi nhập đúng = HMAC theo đề + thí sinh + mật khẩu hiện tại). Vé lưu ở trình duyệt nên tải lại trang / vào lại sau thoát khẩn cấp không phải nhập lại; đổi mật khẩu thì vé cũ hết hiệu lực. `POST /api/submit` phải kèm `entry_token` hợp lệ.
+- Admin: nút chìa khoá của đề → mục **Mật khẩu vào đề**: bật/tắt (`exams.require_password`, mặc định `false`). Học sinh nhập mật khẩu đề (chung hoặc riêng, xem 3.4b). Cột `exams.entry_password` cũ không còn dùng.
+- Lưu ý: mật khẩu đọc cho cả phòng cũng dùng được để cho làm lại / mở khoá / thoát khẩn cấp. Nên đọc **mật khẩu riêng của đề** (chỉ dùng được ở đề đó), không đọc mật khẩu chung.
+- Bật: `GET /api/exam` cần header `X-Exam-Password` (lần đầu) hoặc `X-Exam-Entry` (vé vào đề server cấp khi nhập đúng = HMAC theo đề + thí sinh + `PROCTOR_PASSWORD`). Vé lưu ở trình duyệt nên tải lại trang / vào lại sau thoát khẩn cấp không phải nhập lại. Đổi `PROCTOR_PASSWORD` thì vé cũ hết hiệu lực; đổi mật khẩu riêng của đề thì **không** (học sinh đang làm vẫn nộp được). `POST /api/submit` phải kèm `entry_token` hợp lệ.
 - Nhập sai: ghi `SAI_MAT_KHAU` ("Nhập sai mật khẩu vào đề."), sai 5 lần tạm khoá 5 phút.
 
 ### 3.5. Thoát khẩn cấp
-- Nút **Thoát khẩn cấp (Giám thị)** trong lúc làm bài: nhập mật khẩu giám thị + lý do (tuỳ chọn).
+- Nút **Thoát khẩn cấp (Giám thị)** trong lúc làm bài: nhập mật khẩu đề (chung hoặc riêng) + lý do (tuỳ chọn).
 - Server xác thực mật khẩu rồi ghi `THOAT_KHAN_CAP` (lý do, số câu đã làm, thời gian còn lại, số lần sai mật khẩu) vào `exam_events` kèm toàn bộ nhật ký tới thời điểm đó. Bài làm giữ ở bản nháp, đồng hồ vẫn chạy theo deadline.
+- Thoát xong thí sinh **về danh sách đề** bằng cách tải lại trang `exam.html?user=...` (trình duyệt bỏ sạch trạng thái toàn màn hình / khoá bàn phím; không đăng xuất, không đóng app / SEB; app Android bỏ ghim màn hình). Đề hiện "Đang làm dở" → "Tiếp tục làm bài" để vào lại.
 - Mỗi lần nhập sai mật khẩu ghi `SAI_MAT_KHAU` vào nhật ký bài và `exam_events`.
 - Admin xem ở bảng **Sự cố phòng thi** (trang Kết quả). Bảng kết quả gắn nhãn "Vi phạm N" / "Thoát khẩn cấp N".
 
@@ -173,7 +185,7 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
 - Admin, danh sách đề → nút **SEB**: bật/tắt **Bắt buộc SEB** (`exams.require_seb`), link mở SEB (`sebs://<host>/api/seb-config?exam_id=N`, chạy local là `seb://`), tải file `.seb`, mật khẩu thoát SEB dự phòng (`exams.seb_quit_password`, chuỗi ngẫu nhiên 16 ký tự, đổi được).
 - File `.seb` (XML plist, `SebConfigService`) công khai: `startURL` = trang đăng nhập, `quitURL` = `/seb-quit.html?exam=N&k=<HMAC>` riêng từng đề, `hashedQuitPassword` = SHA-256 mật khẩu thoát (không dùng mã 6 số vì SHA-256 của 6 chữ số dò ngược được ngay), toàn màn hình, tắt tải lại / quay lại. Khoá Alt+Tab, phím Windows, ứng dụng khác dùng mặc định kiosk của SEB.
 - Đề bắt buộc SEB: server từ chối `GET /api/exam` và `POST /api/submit` nếu User-Agent không có `SEB/<phiên bản>` (403 `needsSeb`). Trình duyệt thường chỉ thấy nút "Mở bằng Safe Exam Browser".
-- Thoát trong SEB: giám thị nhập mã 6 số của đề như bình thường; server xác nhận rồi trả `seb_quit_url`, app mở trang đó → SEB tự đóng.
+- Thoát khẩn cấp trong SEB: như trình duyệt thường, về danh sách đề (SEB không đóng). Đóng SEB: nút **Thoát Safe Exam Browser** chỉ có ở màn kết quả ngay sau khi nộp (mở `seb_quit_url` → SEB tự đóng). Đã bấm "Về trang đề thi" hoặc sau thoát khẩn cấp thì chỉ đóng SEB được bằng mật khẩu thoát SEB dự phòng (nút SEB của đề ở trang admin).
 - Giới hạn: nhận diện SEB qua User-Agent là mức cơ bản (chặn trình duyệt thường; công cụ chuyên dụng có thể giả mạo). Mức chặt hơn: kiểm tra header `X-SafeExamBrowser-ConfigKeyHash` (file `.seb` đã bật `sendBrowserExamKey`) — cần thử với SEB thật trước khi bật.
 
 ### 3.6. Khoá trình duyệt (`public/js/lockdown.js`)
@@ -181,7 +193,7 @@ Giao diện thí sinh (`exam.html`) được thiết kế tối ưu kép: Hoạt
 - Chặn: chuột phải, sao chép/cắt/dán, bôi đen, kéo thả, F5/Ctrl+R, F12/Ctrl+Shift+I, Ctrl+P/S/U, Alt+←, nút Back; cảnh báo khi đóng/tải lại trang. Chuột rời cửa sổ (màn hình thứ 2) -> ghi log.
 - Log vi phạm: `ROI_MAN_HINH`, `MAT_TIEU_DIEM`, `THOAT_TOAN_MAN_HINH`, `PHIM_BI_CHAN`, `CHUOT_PHAI`, `SAO_CHEP`, `CHUOT_RA_NGOAI`, `TAI_LAI_TRANG`, `NUT_BACK`, `SAI_MAT_KHAU` (mỗi loại tối đa 1 log / 2 giây).
 - Android Kiosk và Safe Exam Browser (nhận diện qua User-Agent `SEB/`) không bắt buộc toàn màn hình vì hệ điều hành đã khoá.
-- **Khoá bài khi rời trang** (`FREE_LEAVES = 0` trong `lockdown.js` = không có lần cảnh báo): rời bài (thoát toàn màn hình, chuyển tab/cửa sổ, tải lại / đóng trang) là bài bị **khoá ngay** (log `KHOA_BAI`): màn che không còn nút quay lại, chỉ giám thị nhập **mã 6 số của đề** mới mở được (server ghi `MO_KHOA`). Trạng thái khoá lưu trong bản nháp nên tải lại trang không gỡ được. Đã mở khoá mà rời tiếp thì khoá lại ngay. Đồng hồ vẫn chạy khi bị khoá; hết giờ vẫn tự nộp.
+- **Khoá bài khi rời trang** (`FREE_LEAVES = 0` trong `lockdown.js` = không có lần cảnh báo): rời bài (thoát toàn màn hình, chuyển tab/cửa sổ, tải lại / đóng trang) là bài bị **khoá ngay** (log `KHOA_BAI`): màn che không còn nút quay lại, chỉ giám thị nhập **mật khẩu đề** (chung hoặc riêng) mới mở được (server ghi `MO_KHOA`). Trạng thái khoá lưu trong bản nháp nên tải lại trang không gỡ được. Đã mở khoá mà rời tiếp thì khoá lại ngay. Đồng hồ vẫn chạy khi bị khoá; hết giờ vẫn tự nộp.
 - Giới hạn: trang web không thể ngăn người dùng đóng tab, Alt+Tab, phím Windows (bảo vệ của trình duyệt). Khoá cứng cần ứng dụng khoá máy: app Android (Kiosk) hoặc Safe Exam Browser.
 
 ---

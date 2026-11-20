@@ -17,6 +17,8 @@ export interface StudentExam {
   questions: StudentQuestion[];
   lock_on_leave: boolean; // roi trang -> khoa bai (true) / chi canh bao (false)
   entry_token?: string;   // de co mat khau: ve vao de (gui lai khi tai lai trang / nop bai)
+  attempt_ticket?: string; // ve luot dang lam (gui lai khi tai lai trang / nop bai)
+  draft_submitted?: boolean; // ban nhap tren may (theo khoa chong nop trung) da duoc nop -> bo ban nhap, lam luot moi
 }
 
 // 1 de trong danh sach cho thi sinh: kem lan nop gan nhat cua thi sinh (neu co)
@@ -97,17 +99,24 @@ export class ExamService {
   async getExamForStudent(id: unknown, studentName: string, client?: ClientInfo, entry?: EntryCredentials): Promise<StudentExam> {
     const exam = await this.getExamOrThrow(id);
     this.assertClientAllowed(exam, client);
-    if (studentName && !(await this.attempts.status(exam.id, studentName)).canStart) {
-      throw new ConflictError("Bạn đã nộp bài thi này rồi. Muốn làm lại cần giám thị nhập mã.", { needsProctor: true });
+    const status = studentName ? await this.attempts.status(exam, studentName) : null;
+    // Het luot -> can giam thi; tru khi dang lam do 1 luot da duoc vao (ve luot con hop le: tai lai trang)
+    if (status && !status.canStart && !this.attempts.isValidTicket(exam.id, studentName, status.used, entry?.attemptTicket)) {
+      throw new ConflictError("Bạn đã nộp bài thi này rồi. Muốn làm lại cần giám thị nhập mật khẩu đề.", { needsProctor: true });
     }
     const token = this.entryPasswords ? await this.entryPasswords.admit(exam, studentName, entry) : null;
+    const ticket = status ? this.attempts.ticketFor(exam.id, studentName, status.used) : null;
+    const key = cleanString(entry?.submissionKey, 64);
+    const draftSubmitted = !!(key && studentName && this.results && await this.results.findBySubmissionKey(exam.id, studentName, key));
     return {
       id: exam.id,
       title: exam.title,
       duration_minutes: exam.duration_minutes,
       questions: (exam.questions ?? []).map(q => this.grading.sanitizeQuestion(q)),
       lock_on_leave: !!exam.lock_on_leave,
-      ...(token ? { entry_token: token } : {})
+      ...(token ? { entry_token: token } : {}),
+      ...(ticket ? { attempt_ticket: ticket } : {}),
+      ...(draftSubmitted ? { draft_submitted: true } : {})
     };
   }
 }

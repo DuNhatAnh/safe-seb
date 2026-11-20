@@ -11,11 +11,13 @@ let timerInterval = null;
 let tracker = null;
 let isSubmitting = false;
 let inputDebounceTimer = null;
-let submittedByExam = {}; // { [examId]: lan nop gan nhat } -> lam lai can giam thi nhap ma
-let exitMode = null;      // "emergency" (dang lam bai) | "exit" (sau khi nop) | "retake" (cho lam lai)
+let submittedByExam = {}; // { [examId]: lan nop gan nhat } -> lam lai (mac dinh) can giam thi nhap mat khau de
+let exitMode = null;      // "emergency" (dang lam bai) | "entry" (mat khau vao de) | "retake" (cho lam lai)
+let currentSubmissionKey = null; // khoa chong nop trung cua luot dang lam
+let currentAttemptTicket = null; // ve luot dang lam (gui kem khi nop)
+let lastSebQuitUrl = null;       // nop xong trong Safe Exam Browser: trang thoat SEB
 let dialogExamId = null;  // de dang xin lam lai / nhap mat khau vao de
 let currentEntryToken = null; // ve vao de (de co mat khau), gui kem khi nop bai
-let lastSebQuitUrl = null;    // nop bai trong SEB: trang thoat SEB (thoat khong can ma)
 let wrongPasswordCount = 0;
 
 // Khoi tao khi tai trang
@@ -27,6 +29,7 @@ window.addEventListener("DOMContentLoaded", () => {
     return;
   }
   document.getElementById("studentBadge").textContent = currentStudent;
+  showWelcomeOnce();
 
   // Lang nghe thao tac tra loi cho moi dang cau (phan tu co data-ans do registry sinh ra)
   const container = document.getElementById("optionsContainer");
@@ -51,7 +54,18 @@ window.addEventListener("DOMContentLoaded", () => {
 // Luu ban nhap (dap an + han nop + nhat ky) de khoi phuc khi mat mang / tai lai trang
 function saveDraftNow() {
   if (!currentExam || isSubmitting) return;
-  StorageHelper.saveDraft(currentExam.id, userAnswers, deadline, tracker ? tracker.getLogs() : null, Lockdown.active ? Lockdown.state() : null);
+  StorageHelper.saveDraft(currentExam.id, currentStudent, userAnswers, deadline, tracker ? tracker.getLogs() : null, Lockdown.active ? Lockdown.state() : null);
+}
+
+// Loi nhan sau khi dang nhap: trang dang nhap dat co, o day hien 1 lan roi xoa (tai lai trang khong hien lai)
+function showWelcomeOnce() {
+  try {
+    if (sessionStorage.getItem("welcomePending") !== "1") return;
+    sessionStorage.removeItem("welcomePending");
+  } catch (_) {
+    return;
+  }
+  openModal("welcomeModal");
 }
 
 function logoutStudent() {
@@ -135,6 +149,19 @@ function loadAssignedExams() {
   return loadExamPage(examQuery.page);
 }
 
+// Nut "Tai lai" tren thanh tieu de (chi hien o danh sach de): tai lai trang hien tai, giu o tim kiem
+async function reloadExamList() {
+  const btn = document.getElementById("btnReload");
+  btn.disabled = true;
+  btn.textContent = "Đang tải...";
+  try {
+    await loadAssignedExams();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Tải lại";
+  }
+}
+
 function onExamSearch(value) {
   clearTimeout(examSearchTimer);
   examSearchTimer = setTimeout(() => {
@@ -174,8 +201,9 @@ async function loadExamPage(page) {
 
 function examCardHtml(exam) {
   const done = exam.my_result;
-  const draft = StorageHelper.getDraft(exam.id);
-  const inProgress = !done && draft && draft.deadline;
+  const draft = StorageHelper.getDraft(exam.id, currentStudent);
+  // Ban nhap dang lam (ke ca luot lam lai sau khi da nop) uu tien hon "Da nop": hien "Tiep tuc lam bai"
+  const inProgress = !!(draft && draft.deadline);
   const expired = inProgress && draft.deadline <= Date.now();
   let status = "";
   let action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Vào làm bài</button>`;
@@ -186,18 +214,18 @@ function examCardHtml(exam) {
         <a class="btn btn-primary" href="${Seb.link(exam.id)}">Mở bằng Safe Exam Browser</a>
         <div class="field-hint">Chưa cài? <a href="${Seb.DOWNLOAD_URL}" target="_blank" rel="noopener">Tải Safe Exam Browser</a></div>
       </div>`;
-  } else if (done) {
-    status = `<span class="badge badge-green">Đã nộp · ${scoreText(done)}</span>`;
-    action = `<div class="exam-card-action">
-        <button class="btn btn-outline" onclick="openExamHistory(${exam.id})">Lịch sử</button>
-        <button class="btn btn-outline" onclick="startExam(${exam.id})">Làm lại</button>
-      </div>`;
   } else if (expired) {
     status = `<span class="badge badge-red">Đã hết giờ, chưa nộp</span>`;
     action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Nộp bài</button>`;
   } else if (inProgress) {
     status = `<span class="badge badge-amber">Đang làm dở</span>`;
     action = `<button class="btn btn-primary" onclick="startExam(${exam.id})">Tiếp tục làm bài</button>`;
+  } else if (done) {
+    status = `<span class="badge badge-green">Đã nộp · ${scoreText(done)}</span>`;
+    action = `<div class="exam-card-action">
+        <button class="btn btn-outline" onclick="openExamHistory(${exam.id})">Lịch sử</button>
+        <button class="btn btn-outline" onclick="startExam(${exam.id})">Làm lại</button>
+      </div>`;
   }
   if (exam.require_password && !done) status += ` <span class="badge badge-blue">Cần mật khẩu</span>`;
   examTitles[exam.id] = exam.title;
@@ -276,9 +304,22 @@ async function loadHistoryPage(page) {
 async function startExam(examId) {
   try {
     // Server tra de da bo dap an; da nop roi -> 409; de co mat khau -> gui ve vao de da luu (neu co)
-    const examDetail = await StudentApi.getExam(examId, currentStudent, { token: EntryToken.get(examId, currentStudent) });
+    // Ban nhap dang co tren may -> gui ve luot + khoa chong nop trung de server biet luot do con lam tiep duoc / da nop chua
+    const hasDraft = !!(StorageHelper.getDraft(examId, currentStudent) || {}).deadline;
+    const examDetail = await StudentApi.getExam(examId, currentStudent, {
+      token: EntryToken.get(examId, currentStudent),
+      attemptTicket: hasDraft ? AttemptTicket.get(examId, currentStudent) : null,
+      submissionKey: hasDraft ? SubmissionKey.get(examId, currentStudent) : null
+    });
     currentEntryToken = examDetail.entry_token || null;
     if (currentEntryToken) EntryToken.set(examId, currentStudent, currentEntryToken);
+    currentAttemptTicket = examDetail.attempt_ticket || null;
+    if (currentAttemptTicket) AttemptTicket.set(examId, currentStudent, currentAttemptTicket);
+    // Ban nhap tren may da duoc nop (mat phan hoi luc nop) -> bo, lam luot moi (khong khoi phuc bai da nop)
+    if (examDetail.draft_submitted) {
+      StorageHelper.clearDraft(examId, currentStudent);
+      SubmissionKey.clear(examId, currentStudent);
+    }
     if (!examDetail || !examDetail.questions || examDetail.questions.length === 0) {
       alert("Đề thi này chưa có nội dung câu hỏi!");
       return;
@@ -294,9 +335,10 @@ async function startExam(examId) {
     wrongPasswordCount = 0;
 
     // Khoi phuc ban nhap neu con han (mat mang / tat nguon / tai lai trang / thoat khan cap)
-    const draft = StorageHelper.getDraft(examId);
+    const draft = StorageHelper.getDraft(examId, currentStudent);
     // Ban nhap da qua han (vd: thoat khan cap roi het gio) van duoc khoi phuc -> tick() tu nop ngay
     const resume = !!(draft && draft.deadline);
+    currentSubmissionKey = SubmissionKey.ensure(examId, currentStudent, !resume);
     userAnswers = resume ? (draft.answers || {}) : {};
     deadline = resume ? draft.deadline : Date.now() + (currentExam.duration_minutes || 45) * 60000;
     // Tinh ngay (truoc khi ve cau hoi): nut Nop dua vao thoi gian con lai, = 0 bi hieu la het gio -> cho nop
@@ -317,6 +359,7 @@ async function startExam(examId) {
     // Chuyen giao dien
     document.getElementById("viewExamList").style.display = "none";
     document.getElementById("btnLogout").style.display = "none";
+    document.getElementById("btnReload").style.display = "none";
     document.getElementById("viewExamPlay").style.display = "block";
     document.getElementById("headerTitle").textContent = currentExam.title;
     document.getElementById("btnSubmit").textContent = "Nộp bài thi";
@@ -333,7 +376,7 @@ async function startExam(examId) {
     tick();
     timerInterval = setInterval(tick, 1000);
   } catch (err) {
-    // Het luot lam bai -> giam thi nhap ma cua de de cho lam them 1 luot
+    // Het luot lam bai -> giam thi nhap mat khau de de cho lam them 1 luot
     if (err.status === 409 && err.data && err.data.needsProctor) return showExitDialog("retake", examId);
     // De co mat khau ma chua co ve hop le -> hoi mat khau
     if (err.status === 401 && err.data && err.data.needsPassword) {
@@ -509,7 +552,9 @@ async function doSubmitExam() {
       answers: userAnswers,
       duration_minutes: durationSpent,
       action_logs: tracker.getLogs(),
-      entry_token: currentEntryToken
+      entry_token: currentEntryToken,
+      submission_key: currentSubmissionKey,
+      attempt_ticket: currentAttemptTicket
     });
   } catch (err) {
     if (err.status === 409 && err.data && err.data.result) {
@@ -528,12 +573,16 @@ async function doSubmitExam() {
   }
 
   // Luu thanh cong -> Xoa ban nhap -> Ngung theo doi -> Man hinh ket qua (thiet bi van o che do Kiosk)
-  StorageHelper.clearDraft(currentExam.id);
+  StorageHelper.clearDraft(currentExam.id, currentStudent);
+  SubmissionKey.clear(currentExam.id, currentStudent);
+  AttemptTicket.clear(currentExam.id, currentStudent);
   tracker.stop();
   Lockdown.stop();
   document.getElementById("timerDisplay").style.display = "none";
-  // Nop xong: bo ghim man hinh (app Android) -> hoc sinh tu thoat duoc, khong can ma giam thi
+  // Nop xong: bo ghim man hinh (app Android). Man hinh ket qua: xem lich su / ve trang de thi
+  // (+ "Thoat Safe Exam Browser" neu dang chay trong SEB).
   lastSebQuitUrl = result.seb_quit_url || null;
+  document.getElementById("btnSebQuit").style.display = lastSebQuitUrl ? "" : "none";
   if (window.KioskBridge && typeof window.KioskBridge.unlock === "function") window.KioskBridge.unlock();
 
   const minutes = result.duration_minutes || durationSpent;
@@ -549,23 +598,13 @@ async function doSubmitExam() {
   document.getElementById("viewLockScreen").style.display = "flex";
 }
 
-// 3. Sau khi nop: thoat KHONG can mat khau (ma giam thi chi can khi thoat giua chung)
-//    App Android: dong app. Safe Exam Browser: mo trang thoat cua de -> SEB tu dong. Trinh duyet: ve dang nhap.
-function exitAfterSubmit() {
-  if (lastSebQuitUrl) {
-    window.location.href = lastSebQuitUrl;
-    return;
-  }
-  if (window.KioskBridge && typeof window.KioskBridge.stopLock === "function") {
-    window.KioskBridge.stopLock();
-    return;
-  }
-  Lockdown.exitFullscreen();
-  window.location.href = "index.html";
-}
-
 // Sau khi nop: xem lich su
 // showHistory: nut "Xem lich su lam bai" sau khi nop -> mo lich su cua de vua nop
+// Nop xong trong Safe Exam Browser: mo trang thoat cua de -> SEB tu dong (khong can mat khau)
+function quitSebAfterSubmit() {
+  if (lastSebQuitUrl) window.location.href = lastSebQuitUrl;
+}
+
 function backToList(showHistory = false) {
   const justDone = currentExam;
   currentExam = null;
@@ -573,6 +612,7 @@ function backToList(showHistory = false) {
   document.getElementById("viewExamPlay").style.display = "none";
   document.getElementById("viewExamList").style.display = "block";
   document.getElementById("btnLogout").style.display = "";
+  document.getElementById("btnReload").style.display = "";
   document.getElementById("headerTitle").textContent = "Safe Exam";
   loadAssignedExams();
   if (showHistory && justDone) {
@@ -581,19 +621,14 @@ function backToList(showHistory = false) {
   }
 }
 
-// 4. Giam thi nhap MA 6 SO CUA DE (admin xem o trang quan tri). Moi lan nhap deu ghi log len admin (exam_events)
+// 4. Giam thi nhap MAT KHAU DE (ma rieng cua de hoac mat khau chung, admin xem o trang quan tri). Moi lan nhap deu ghi log len admin (exam_events)
 //    mode "emergency": thoat khan cap khi dang lam bai (giu ban nhap de vao lam tiep)
-//    mode "exit": thoat ung dung sau khi da nop bai
+//    mode "entry": mat khau vao de (de bat mat khau)
 //    mode "retake": cho thi sinh lam them 1 luot de da nop
 const EXIT_DIALOG = {
   emergency: {
     title: "Thoát khẩn cấp",
-    text: "Chỉ giám thị được thực hiện: nhập mã giám thị 6 số của đề. Bài làm được giữ lại, thời gian vẫn tiếp tục chạy. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
-    button: "Xác nhận thoát"
-  },
-  exit: {
-    title: "Thoát ứng dụng",
-    text: "Nhập mã giám thị 6 số của đề để thoát ứng dụng. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
+    text: "Chỉ giám thị được thực hiện: nhập mật khẩu đề. Bài làm được giữ lại, thời gian vẫn tiếp tục chạy. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
     button: "Xác nhận thoát"
   },
   entry: {
@@ -603,7 +638,7 @@ const EXIT_DIALOG = {
   },
   retake: {
     title: "Làm lại bài thi",
-    text: "Bạn đã nộp bài thi này. Giám thị nhập mã 6 số của đề để cho làm thêm 1 lượt. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
+    text: "Bạn đã nộp bài thi này. Giám thị nhập mật khẩu đề để cho làm thêm 1 lượt. Thao tác được ghi vào nhật ký gửi về quản trị viên.",
     button: "Cho làm lại"
   }
 };
@@ -619,7 +654,7 @@ function showExitDialog(mode, examId = null) {
   document.getElementById("exitReasonGroup").style.display = mode === "emergency" ? "block" : "none";
   document.getElementById("exitReason").value = "";
   document.getElementById("proctorInput").value = "";
-  document.getElementById("proctorInput").placeholder = mode === "entry" ? "Mật khẩu đề 6 số" : "Mã giám thị 6 số";
+  document.getElementById("proctorInput").placeholder = "Mật khẩu đề";
   document.getElementById("unlockError").style.display = "none";
   document.getElementById("viewUnlockModal").style.display = "flex";
   if (mode === "emergency" && tracker && tracker.active) tracker.addLog("YEU_CAU_THOAT", "Mở hộp thoại thoát khẩn cấp");
@@ -642,7 +677,7 @@ function showProctorError(err, actionLabel) {
   document.getElementById("proctorInput").value = "";
   if (err.status === 401 || err.status === 429) {
     wrongPasswordCount++;
-    if (tracker && tracker.active) tracker.addLog("SAI_MAT_KHAU", `Nhập sai mã giám thị khi ${actionLabel} (lần ${wrongPasswordCount})`);
+    if (tracker && tracker.active) tracker.addLog("SAI_MAT_KHAU", `Nhập sai mật khẩu đề khi ${actionLabel} (lần ${wrongPasswordCount})`);
     errBox.textContent = err.message;
   } else {
     errBox.textContent = "Không kết nối được máy chủ để xác thực giám thị. Kiểm tra mạng rồi thử lại.";
@@ -674,7 +709,7 @@ async function unlockLockedExam() {
     btn.disabled = false;
     input.value = "";
     if (err.status === 401 || err.status === 429) {
-      if (tracker && tracker.active) tracker.addLog("SAI_MAT_KHAU", "Nhập sai mã giám thị khi mở khoá bài thi");
+      if (tracker && tracker.active) tracker.addLog("SAI_MAT_KHAU", "Nhập sai mật khẩu đề khi mở khoá bài thi");
       errBox.textContent = err.message;
     } else {
       errBox.textContent = "Không kết nối được máy chủ để xác thực giám thị. Kiểm tra mạng rồi thử lại.";
@@ -711,7 +746,7 @@ async function verifyRetake(password) {
     if (err.status !== 409) return showProctorError(err, "cho làm lại");
   }
   hideUnlockDialog();
-  StorageHelper.clearDraft(examId); // lan lam moi, khong dung ban nhap cu
+  StorageHelper.clearDraft(examId, currentStudent); // lan lam moi, khong dung ban nhap cu
   delete submittedByExam[examId];
   startExam(examId);
 }
@@ -726,46 +761,38 @@ async function verifyUnlock() {
   if (exitMode === "retake") return verifyRetake(password);
   if (exitMode === "entry") return verifyEntry(password);
 
-  const emergency = exitMode === "emergency" && currentExam;
+  // Con lai: thoat khan cap khi dang lam bai (nut chi co trong luc lam bai)
+  if (!currentExam) return hideUnlockDialog();
+  flushPendingInput();
+  const wrongNote = wrongPasswordCount ? ` Sai mật khẩu đề ${wrongPasswordCount} lần trước đó.` : "";
+  const reason = document.getElementById("exitReason").value.trim() || "không ghi lý do";
+  const mins = Math.floor(remainingSeconds / 60), secs = remainingSeconds % 60;
+  const detail = `Giám thị cho thoát khẩn cấp. Lý do: ${reason}. Đã trả lời ${getAnsweredCount()}/${answerableIndexes().length} câu, còn ${mins} phút ${secs} giây.${wrongNote}`;
 
-  const wrongNote = wrongPasswordCount ? ` Sai mã giám thị ${wrongPasswordCount} lần trước đó.` : "";
-  let detail = `Giám thị mở khoá, thí sinh thoát ứng dụng sau khi nộp bài.${wrongNote}`;
-  if (emergency) {
-    flushPendingInput();
-    const reason = document.getElementById("exitReason").value.trim() || "không ghi lý do";
-    const mins = Math.floor(remainingSeconds / 60), secs = remainingSeconds % 60;
-    detail = `Giám thị cho thoát khẩn cấp. Lý do: ${reason}. Đã trả lời ${getAnsweredCount()}/${answerableIndexes().length} câu, còn ${mins} phút ${secs} giây.${wrongNote}`;
-  }
-
-  let exitResult = null;
   try {
     // Mat khau chi server biet; dung -> server ghi su co vao exam_events
-    exitResult = await StudentApi.proctorExit({
+    await StudentApi.proctorExit({
       password,
-      type: emergency ? "THOAT_KHAN_CAP" : "THOAT_UNG_DUNG",
+      type: "THOAT_KHAN_CAP",
       student_name: currentStudent,
-      // Ca thoat sau khi nop cung kiem tra theo ma cua de vua lam
-      exam_id: currentExam ? currentExam.id : null,
-      exam_title: currentExam ? currentExam.title : null,
+      exam_id: currentExam.id,
+      exam_title: currentExam.title,
       detail,
-      action_logs: emergency ? [...tracker.getLogs(), { time: new Date().toLocaleTimeString("vi-VN"), timestamp: new Date().toISOString(), type: "THOAT_KHAN_CAP", detail }] : []
+      action_logs: [...tracker.getLogs(), { time: new Date().toLocaleTimeString("vi-VN"), timestamp: new Date().toISOString(), type: "THOAT_KHAN_CAP", detail }]
     });
   } catch (err) {
-    return showProctorError(err, emergency ? "thoát khẩn cấp" : "thoát ứng dụng");
+    return showProctorError(err, "thoát khẩn cấp");
   }
 
-  if (emergency) {
-    if (timerInterval) clearInterval(timerInterval);
-    tracker.addLog("THOAT_KHAN_CAP", detail);
-    saveDraftNow(); // giu bai lam + nhat ky de vao lam tiep
-    tracker.stop();
-  }
+  if (timerInterval) clearInterval(timerInterval);
+  tracker.addLog("THOAT_KHAN_CAP", detail);
+  saveDraftNow(); // giu bai lam + nhat ky de vao lam tiep ("Tiep tuc lam bai" o danh sach de)
+  tracker.stop();
   Lockdown.stop();
-  if (window.KioskBridge && typeof window.KioskBridge.stopLock === "function") {
-    window.KioskBridge.stopLock();
-  } else {
-    Lockdown.exitFullscreen();
-  }
-  // Trong Safe Exam Browser: mo trang thoat cua de -> SEB tu dong (server chi tra khi ma dung)
-  window.location.href = exitResult && exitResult.seb_quit_url ? exitResult.seb_quit_url : "index.html";
+  Lockdown.exitFullscreen();
+  // Bo ghim man hinh (app Android) nhung KHONG dong app; SEB cung khong dong: chi ve danh sach de
+  if (window.KioskBridge && typeof window.KioskBridge.unlock === "function") window.KioskBridge.unlock();
+  // Tai lai trang danh sach de (KHONG o lai trang cu): trinh duyet bo sach trang thai toan man hinh / khoa ban phim /
+  // lich su da them. O lai trang cu tren Edge co the treo ca trang (ke ca hop confirm cua trinh duyet).
+  window.location.replace(`exam.html?user=${encodeURIComponent(currentStudent)}`);
 }

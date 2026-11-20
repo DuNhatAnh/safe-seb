@@ -164,7 +164,7 @@ const Lockdown = {
     const left = FREE_LEAVES - this.leaves; // so lan con duoc roi bai truoc khi bi khoa
     document.getElementById("shieldTitle").textContent = locked ? "BÀI THI ĐÃ BỊ KHOÁ" : this.leaves ? "BẠN ĐÃ RỜI BÀI THI" : "CHẾ ĐỘ THI";
     document.getElementById("shieldReason").textContent = locked
-      ? `Bạn đã rời bài thi ${this.leaves} lần. Gọi giám thị nhập mã giám thị để làm tiếp. Thời gian làm bài vẫn chạy.`
+      ? `Bạn đã rời bài thi ${this.leaves} lần. Gọi giám thị nhập mật khẩu đề để làm tiếp. Thời gian làm bài vẫn chạy.`
       : (reason || "Bạn đã rời bài thi.");
     document.getElementById("shieldCount").textContent = locked
       ? "Việc mở khoá được ghi vào nhật ký gửi về quản trị viên."

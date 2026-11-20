@@ -689,18 +689,18 @@ async function loadExistingExams(page = adminExamState.page) {
   try {
     const search = adminExamState.q ? `&title=ilike.${pgValue(`*${adminExamState.q.replace(/[*%,()"]/g, " ")}*`)}` : "";
     const { rows: exams, total } = await supabasePage(
-      `exams?select=id,title,duration_minutes,assigned_to,require_seb,require_password,lock_on_leave,created_at&order=created_at.desc${search}&limit=${ADMIN_EXAM_PAGE}&offset=${(page - 1) * ADMIN_EXAM_PAGE}`);
+      `exams?select=id,title,duration_minutes,assigned_to,require_seb,require_password,lock_on_leave,allow_retake,created_at&order=created_at.desc${search}&limit=${ADMIN_EXAM_PAGE}&offset=${(page - 1) * ADMIN_EXAM_PAGE}`);
     if (!exams.length && total && page > 1) return loadExistingExams(Math.ceil(total / ADMIN_EXAM_PAGE));
     pager.innerHTML = pagerHtml({ page, size: ADMIN_EXAM_PAGE, total }, "loadExistingExams");
     tbody.innerHTML = exams && exams.length
       ? exams.map(ex => `
         <tr class="${ex.id === editingExamId ? "editing-exam" : ""}">
           <td>#${ex.id}</td>
-          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}${ex.lock_on_leave ? ' <span class="badge badge-red">Khoá khi rời trang</span>' : ""}</td>
+          <td><strong>${escapeHtml(ex.title)}</strong>${ex.id === editingExamId ? ' <span class="badge badge-blue">Đang sửa</span>' : ""}${ex.require_seb ? ' <span class="badge badge-amber">Bắt buộc SEB</span>' : ""}${ex.require_password ? ' <span class="badge badge-blue">Có mật khẩu</span>' : ""}${ex.lock_on_leave ? ' <span class="badge badge-red">Khoá khi rời trang</span>' : ""}${ex.allow_retake ? ' <span class="badge badge-green">Làm lại nhiều lần</span>' : ""}</td>
           <td>${ex.duration_minutes} phút</td>
           <td>${ex.created_at ? new Date(ex.created_at).toLocaleDateString("vi-VN") : "--"}</td>
           <td class="nowrap">
-            <button class="btn btn-outline btn-sm btn-icon" title="Mã giám thị 6 số" aria-label="Mã giám thị đề #${ex.id}" onclick="showProctorCode(${ex.id})"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m16 7 3 3"/><path d="m19 4 2 2"/></svg></button>
+            <button class="btn btn-outline btn-sm btn-icon" title="Mật khẩu &amp; cài đặt làm bài" aria-label="Mật khẩu đề #${ex.id}" onclick="showProctorCode(${ex.id})"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m16 7 3 3"/><path d="m19 4 2 2"/></svg></button>
             <button class="btn btn-outline btn-sm" title="Safe Exam Browser" onclick="showSebSettings(${ex.id})">SEB</button>
             <button class="btn btn-outline btn-sm" onclick="editExam(${ex.id})">✎ Sửa</button>
             <button class="btn btn-outline btn-sm btn-danger-outline" onclick="deleteExam(${ex.id})">Xoá</button>
@@ -712,83 +712,96 @@ async function loadExistingExams(page = adminExamState.page) {
   }
 }
 
-// =================================================== MA GIAM THI 6 SO
-// Moi de co 1 ma (server sinh ngau nhien): thoat khan cap, thoat ung dung, cho thi sinh lam lai.
+// =================================================== MAT KHAU DE + CAI DAT LAM BAI
+// Moi o nhap mat khau (vao de, cho lam lai, mo khoa bai, thoat khan cap) nhan 1 trong 2:
+// ma rieng 6 so cua de (doi duoc o day) hoac mat khau chung PROCTOR_PASSWORD.
 let proctorCodeExamId = null;
 
 async function showProctorCode(examId, regenerate = false) {
   proctorCodeExamId = examId;
   if (!regenerate) {
     loadEntryPassword(examId);
-    loadLockOnLeave(examId);
+    loadExamFlags(examId);
   }
   const box = document.getElementById("proctorCodeValue");
-  document.getElementById("proctorCodeTitle").textContent = `Mã giám thị · Đề #${examId}`;
+  const common = document.getElementById("commonPasswordValue");
+  document.getElementById("proctorCodeTitle").textContent = `Mật khẩu đề · Đề #${examId}`;
   box.textContent = "······";
+  common.textContent = "······";
   openModal("proctorCodeModal");
   try {
-    const { code } = await StudentApi.proctorCode(examId, regenerate);
-    box.textContent = code;
-    if (regenerate) showToast("Đã đổi mã mới. Mã cũ hết hiệu lực.");
+    const res = await StudentApi.proctorCode(examId, regenerate);
+    box.textContent = res.code;
+    common.textContent = res.common;
+    if (regenerate) showToast("Đã đổi mật khẩu riêng của đề. Mật khẩu riêng cũ hết hiệu lực.");
   } catch (err) {
     box.textContent = "Lỗi";
-    alert("Không lấy được mã giám thị: " + err.message);
+    common.textContent = "Lỗi";
+    alert("Không lấy được mật khẩu đề: " + err.message);
   }
 }
 
-// Khoa bai khi roi trang (mac dinh tat): bat -> roi trang la khoa, giam thi nhap ma moi mo
-async function loadLockOnLeave(examId) {
-  const box = document.getElementById("lockOnLeaveEnabled");
+function regenerateProctorCode() {
+  if (!confirm("Đổi mật khẩu riêng của đề? Mật khẩu riêng cũ hết hiệu lực ngay (mật khẩu chung vẫn dùng được).")) return;
+  showProctorCode(proctorCodeExamId, true);
+}
+
+// Cong tac bat / tat luu thang vao cot cua de (mac dinh deu tat)
+const EXAM_FLAGS = {
+  lock_on_leave: {
+    box: "lockOnLeaveEnabled",
+    on: "Đã bật: rời trang là khoá bài.",
+    off: "Đã tắt: rời trang chỉ cảnh báo, không cần mật khẩu."
+  },
+  allow_retake: {
+    box: "allowRetakeEnabled",
+    on: "Đã bật: thí sinh làm lại bao nhiêu lần cũng được, không cần mật khẩu.",
+    off: "Đã tắt: mỗi thí sinh làm 1 lần, làm lại phải nhập mật khẩu đề."
+  }
+};
+
+async function loadExamFlags(examId) {
   try {
-    const rows = await supabaseRequest(`exams?id=eq.${examId}&select=lock_on_leave`);
-    box.checked = !!rows?.[0]?.lock_on_leave;
+    const rows = await supabaseRequest(`exams?id=eq.${examId}&select=${Object.keys(EXAM_FLAGS).join(",")}`);
+    for (const [col, f] of Object.entries(EXAM_FLAGS)) document.getElementById(f.box).checked = !!rows?.[0]?.[col];
   } catch (err) {
-    alert("Không đọc được cài đặt khoá bài: " + err.message);
+    alert("Không đọc được cài đặt của đề: " + err.message);
   }
 }
 
-async function toggleLockOnLeave() {
-  const on = document.getElementById("lockOnLeaveEnabled").checked;
+async function toggleExamFlag(col) {
+  const f = EXAM_FLAGS[col];
+  const box = document.getElementById(f.box);
+  const on = box.checked;
   try {
-    await ExamService.updateExam(proctorCodeExamId, { lock_on_leave: on });
-    showToast(on ? "Đã bật: rời trang là khoá bài." : "Đã tắt: rời trang chỉ cảnh báo, không cần mã.");
+    await ExamService.updateExam(proctorCodeExamId, { [col]: on });
+    showToast(on ? f.on : f.off);
     loadExistingExams();
   } catch (err) {
-    document.getElementById("lockOnLeaveEnabled").checked = !on;
+    box.checked = !on;
     alert("Không lưu được: " + err.message);
   }
 }
 
-// Mat khau vao de (mac dinh tat): bat -> hoc sinh nhap moi bat dau lam duoc. Khac ma giam thi.
+function toggleLockOnLeave() { toggleExamFlag("lock_on_leave"); }
+function toggleAllowRetake() { toggleExamFlag("allow_retake"); }
+
+// Mat khau vao de (mac dinh tat): bat -> hoc sinh nhap mat khau de moi bat dau lam duoc
 async function loadEntryPassword(examId, changes = {}) {
-  const box = document.getElementById("entryPasswordValue");
   try {
     const s = await StudentApi.entryPassword(examId, changes);
     document.getElementById("entryPasswordEnabled").checked = s.enabled;
-    document.getElementById("entryPasswordBox").style.display = s.enabled ? "flex" : "none";
-    box.textContent = s.password || "······";
     if ("enabled" in changes) {
       showToast(s.enabled ? "Đã bật mật khẩu vào đề." : "Đã tắt mật khẩu vào đề.");
       loadExistingExams();
     }
-    if (changes.regenerate) showToast("Đã đổi mật khẩu vào đề. Mật khẩu cũ hết hiệu lực.");
   } catch (err) {
-    alert("Không lấy được mật khẩu vào đề: " + err.message);
+    alert("Không lưu được mật khẩu vào đề: " + err.message);
   }
 }
 
 function toggleEntryPassword() {
   loadEntryPassword(proctorCodeExamId, { enabled: document.getElementById("entryPasswordEnabled").checked });
-}
-
-function regenerateEntryPassword() {
-  if (!confirm("Đổi mật khẩu vào đề? Học sinh chưa vào đề phải dùng mật khẩu mới.")) return;
-  loadEntryPassword(proctorCodeExamId, { regenerate: true });
-}
-
-function regenerateProctorCode() {
-  if (!confirm("Đổi sang mã mới? Mã cũ sẽ hết hiệu lực ngay (giám thị phải dùng mã mới).")) return;
-  showProctorCode(proctorCodeExamId, true);
 }
 
 // =================================================== SAFE EXAM BROWSER
@@ -860,7 +873,7 @@ function renderLogs(logs) {
 const EVENT_LABELS = {
   THOAT_KHAN_CAP: ["Thoát khẩn cấp", "badge-red"],
   THOAT_UNG_DUNG: ["Thoát ứng dụng", "badge-muted"],
-  SAI_MAT_KHAU: ["Sai mã giám thị", "badge-amber"],
+  SAI_MAT_KHAU: ["Sai mật khẩu đề", "badge-amber"],
   CHO_LAM_LAI: ["Cho làm lại", "badge-blue"],
   MO_KHOA: ["Mở khoá bài thi", "badge-amber"]
 };

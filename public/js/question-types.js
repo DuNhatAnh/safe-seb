@@ -342,7 +342,7 @@ const QUESTION_TYPES = {
 
     readEditor: root => ({ solution: root.querySelector(".ed-solution").value }),
 
-    renderExam: () => '<div class="alert-box alert-info">Câu tự luận: làm bài trên giấy. Giáo viên sẽ chấm và nhập điểm sau khi bạn nộp bài.</div>',
+    renderExam: () => '<div class="alert-box alert-info">Nguyên cứ làm ra giấy rồi gửi cho chị Thảo chấm nha</div>',
     update: () => ({ value: undefined }),
     isAnswered: () => false,
     grade: () => null,

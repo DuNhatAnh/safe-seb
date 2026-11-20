@@ -234,7 +234,9 @@ const StudentApi = {
     query: { id, student },
     headers: {
       ...(entry.password ? { "X-Exam-Password": entry.password } : {}),
-      ...(entry.token ? { "X-Exam-Entry": entry.token } : {})
+      ...(entry.token ? { "X-Exam-Entry": entry.token } : {}),
+      ...(entry.attemptTicket ? { "X-Exam-Attempt": entry.attemptTicket } : {}),
+      ...(entry.submissionKey ? { "X-Exam-Submission": entry.submissionKey } : {})
     }
   }),
   // Admin: mat khau vao de ({ enabled?, regenerate? })
@@ -244,7 +246,7 @@ const StudentApi = {
   proctorExit: payload => apiRequest("proctor-exit", { method: "POST", body: payload }),
   // Giam thi nhap ma de cho thi sinh lam them 1 luot
   retake: payload => apiRequest("retake", { method: "POST", body: payload }),
-  // Admin: xem / doi ma giam thi 6 so cua de
+  // Admin: xem mat khau de (chung cho moi de) cua de
   proctorCode: (examId, regenerate = false) => apiRequest("admin/proctor-code", { method: "POST", body: { exam_id: examId, regenerate } }),
   // Admin: cai dat Safe Exam Browser cua de ({ require_seb?, regenerate_password? })
   sebSettings: (examId, changes = {}) => apiRequest("admin/seb", { method: "POST", body: { exam_id: examId, ...changes } }),
@@ -389,26 +391,29 @@ const VIOLATION_TYPES = ["ROI_MAN_HINH", "MAT_TIEU_DIEM", "THOAT_TOAN_MAN_HINH",
 // 12. Quan ly bo nho tam LocalStorage
 const StorageHelper = {
   // lock: { leaves, locked } so lan roi bai + bai dang bi khoa (tai lai trang khong go duoc khoa)
-  saveDraft(examId, answers, deadline, logs = null, lock = null) {
+  // Ban nhap gan voi DE + THI SINH: cung 1 trinh duyet, thi sinh khac khong thay / khong mo duoc bai cua nhau
+  key: (examId, student) => `safe_exam_draft_${examId}_${student}`,
+
+  saveDraft(examId, student, answers, deadline, logs = null, lock = null) {
     try {
-      localStorage.setItem(`safe_exam_draft_${examId}`, JSON.stringify({ answers, deadline, logs, lock, savedAt: Date.now() }));
+      localStorage.setItem(this.key(examId, student), JSON.stringify({ answers, deadline, logs, lock, savedAt: Date.now() }));
     } catch (e) {
       console.warn("Khong the luu nhap:", e);
     }
   },
 
-  getDraft(examId) {
+  getDraft(examId, student) {
     try {
-      const data = localStorage.getItem(`safe_exam_draft_${examId}`);
+      const data = localStorage.getItem(this.key(examId, student));
       return data ? JSON.parse(data) : null;
     } catch (e) {
       return null;
     }
   },
 
-  clearDraft(examId) {
+  clearDraft(examId, student) {
     try {
-      localStorage.removeItem(`safe_exam_draft_${examId}`);
+      localStorage.removeItem(this.key(examId, student));
     } catch (e) { }
   }
 };
@@ -429,6 +434,44 @@ const EntryToken = {
   },
   set(examId, student, token) {
     try { localStorage.setItem(this.key(examId, student), token); } catch (e) { }
+  },
+  clear(examId, student) {
+    try { localStorage.removeItem(this.key(examId, student)); } catch (e) { }
+  }
+};
+
+// Khoa chong nop trung cua 1 luot lam bai: tao khi bat dau luot moi, giu khi vao lai bai lam do,
+// xoa khi nop thanh cong. Nop lai cung khoa -> server tra lai ket qua da luu (khong tao ban ghi moi).
+const SubmissionKey = {
+  key: (examId, student) => `safe_exam_submit_${examId}_${student}`,
+  get(examId, student) {
+    try { return localStorage.getItem(this.key(examId, student)); } catch (e) { return null; }
+  },
+  // fresh: luot lam moi -> tao khoa moi; vao lai bai lam do -> dung lai khoa cu (chua co thi tao)
+  ensure(examId, student, fresh) {
+    let k = null;
+    try { k = fresh ? null : localStorage.getItem(this.key(examId, student)); } catch (e) { }
+    if (!k) {
+      k = (window.crypto && typeof crypto.randomUUID === "function")
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+      try { localStorage.setItem(this.key(examId, student), k); } catch (e) { }
+    }
+    return k;
+  },
+  clear(examId, student) {
+    try { localStorage.removeItem(this.key(examId, student)); } catch (e) { }
+  }
+};
+
+// Ve luot dang lam (server cap khi vao de): luot da vao thi tai lai / nop duoc du admin doi cai dat giua chung
+const AttemptTicket = {
+  key: (examId, student) => `safe_exam_attempt_${examId}_${student}`,
+  get(examId, student) {
+    try { return localStorage.getItem(this.key(examId, student)); } catch (e) { return null; }
+  },
+  set(examId, student, ticket) {
+    try { localStorage.setItem(this.key(examId, student), ticket); } catch (e) { }
   },
   clear(examId, student) {
     try { localStorage.removeItem(this.key(examId, student)); } catch (e) { }

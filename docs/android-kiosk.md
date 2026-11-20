@@ -8,7 +8,7 @@
 3. Mở app **Safe Exam** → khi Android hỏi **"Ghim ứng dụng?"** bấm **Ghim / OK** → đăng nhập, làm bài.
 
 Khi đã ghim: không có Home, đa nhiệm, thanh thông báo. Học sinh vẫn có thể gỡ ghim (giữ Back + đa nhiệm), nhưng
-**rời khỏi app là bài thi bị khoá ngay**, chỉ giám thị nhập mã giám thị của đề mới làm tiếp. Mọi lần khoá / mở khoá đều ghi nhật ký cho admin.
+**rời khỏi app là bài thi bị khoá ngay**, chỉ giám thị nhập mật khẩu đề (mật khẩu chung hoặc mật khẩu riêng của đề) mới làm tiếp. Mọi lần khoá / mở khoá đều ghi nhật ký cho admin.
 
 File `.apk` do GitHub tự build mỗi khi code trong `android/` thay đổi (`.github/workflows/android-apk.yml`).
 Địa chỉ hệ thống thi trong app = biến `SAFE_EXAM_URL` (GitHub › Settings › Secrets and variables › Actions › Variables), không đặt thì lấy `safeExamUrl` trong `android/gradle.properties`.
@@ -55,11 +55,12 @@ Chỉ cần khi muốn chặn cả việc gỡ ghim. Không làm bước này th
 | Việc | Cách làm |
 |---|---|
 | Học sinh thi | Mở app → đăng nhập → làm bài. Máy khoá suốt lúc app mở. |
-| Thoát khẩn cấp / sau khi nộp | Giám thị nhập **mã giám thị 6 số của đề** (admin xem ở nút chìa khoá). |
+| Thoát khẩn cấp (đang làm bài) | Giám thị nhập **mật khẩu đề**: mật khẩu chung hoặc mật khẩu riêng của đề (admin xem ở nút chìa khoá). Thí sinh về danh sách đề, app bỏ ghim màn hình. |
+| Sau khi nộp | Không có nút thoát: chỉ **Xem lịch sử làm bài** / **Về trang đề thi**; màn hình đã bỏ ghim. |
 | Thoát app khi chưa có ai thi | Màn đăng nhập › **Thoát ứng dụng (Quản trị)** › mật khẩu quản trị. |
 | Trả điện thoại về bình thường | Màn đăng nhập › **Gỡ khoá thiết bị** › mật khẩu quản trị. Muốn khoá lại thì làm lại bước 5. |
 
-Mật khẩu quản trị và mã giám thị đều do server kiểm tra (không lưu trong app). **Điện thoại phải có mạng** tới hệ thống thi mới thoát / gỡ khoá được.
+Mật khẩu quản trị và mật khẩu đề đều do server kiểm tra (không lưu trong app). **Điện thoại phải có mạng** tới hệ thống thi mới thoát / gỡ khoá được.
 
 ## Khi kẹt (mất mạng, server hỏng, quên mật khẩu)
 

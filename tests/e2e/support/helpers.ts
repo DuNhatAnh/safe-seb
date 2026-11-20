@@ -60,6 +60,9 @@ export async function loginStudent(page: Page, name: string): Promise<void> {
   await page.locator("#username").fill(name);
   await page.locator("#submitBtn").click();
   await expect(page).toHaveURL(/exam\.html\?user=/);
+  // Loi nhan sau khi dang nhap: dong lai truoc khi thao tac
+  await page.locator("#btnCloseWelcome").click();
+  await expect(page.locator("#welcomeModal")).toBeHidden();
 }
 
 // ------------------------------------------------------------ Admin: nhap de JSON

@@ -16,6 +16,18 @@ Hiện ở cuối mọi trang ("Phiên bản 1.1 · mã commit"), trong app Andr
 
 ---
 
+## 1.2
+
+- **Mật khẩu đề**: mọi ô nhập mật khẩu (vào đề nếu bật, cho làm lại, mở khoá bài, thoát khẩn cấp) nhận **mật khẩu chung** (`PROCTOR_PASSWORD`, mặc định cho mọi đề) **hoặc mật khẩu riêng 6 số của đề**. Nút chìa khoá bên admin hiện cả 2, đổi được mật khẩu riêng. Mật khẩu không còn tự đổi sau khi cho làm lại.
+- **Cho làm lại nhiều lần** (mỗi đề, mặc định tắt): bật thì học sinh bấm "Làm lại" là vào làm ngay, không cần mật khẩu. Đang làm dở mà admin tắt vẫn nộp được lượt đó.
+- **Thoát khẩn cấp** đúng mật khẩu → về **danh sách đề** (không đăng xuất, không đóng app / SEB), bài làm giữ để "Tiếp tục làm bài".
+- **Nộp bài xong** chỉ còn "Xem lịch sử làm bài" và "Về trang đề thi" (trong Safe Exam Browser thêm nút "Thoát Safe Exam Browser").
+- Trang học sinh: nút **Tải lại** danh sách đề; lời nhắn + nguyên tắc thưởng sau khi đăng nhập; câu tự luận ghi "Nguyên cứ làm ra giấy rồi gửi cho chị Thảo chấm nha".
+- Sửa lỗi: bài làm dở bị dùng chung giữa các tên đăng nhập trên cùng 1 trình duyệt; nộp trùng khi mất mạng rồi bấm "Thử nộp lại"; kẹt làm lại sau khi tắt "cho làm lại nhiều lần"; thẻ đề hiện "Đã nộp" khi đang làm dở lượt mới.
+- Chống dò mật khẩu: thêm giới hạn theo máy (IP) dùng chung cho mọi ô nhập mật khẩu (30 lần sai trong 10 phút).
+- Database: migration `0009` (`exams.allow_retake`), `0010` (`exam_events.attempt`, `exam_results.submission_key`).
+- Cần đặt `PROCTOR_PASSWORD` trên Vercel. Bản nháp làm dở lưu theo cách cũ (chưa gắn tên học sinh) không còn hiện. App Android **không** cần cài lại.
+
 ## 1.1
 
 - Tên file tải app kèm phiên bản: `safe-exam-v1.1.apk`; link tải ngắn cố định **https://safe-seb.vercel.app/tai-app** (luôn trỏ tới bản mới nhất).

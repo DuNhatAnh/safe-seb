@@ -183,7 +183,8 @@
           return;
         }
 
-        // Thi sinh vao thang phong thi
+        // Thi sinh vao thang phong thi; trang de thi hien loi nhan chao 1 lan sau moi lan dang nhap
+        try { sessionStorage.setItem('welcomePending', '1'); } catch (_) { }
         window.location.href = `exam.html?user=${encodeURIComponent(user)}`;
         return;
       }

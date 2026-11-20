@@ -14,6 +14,7 @@
     <div id="headerRight" style="display: flex; align-items: center; gap: 12px;">
       <span id="studentBadge" class="badge badge-blue"></span>
       <div id="timerDisplay" class="timer-box" style="display: none;">00:00</div>
+      <button id="btnReload" class="btn btn-outline btn-sm" onclick="reloadExamList()" title="Tải lại danh sách đề thi">Tải lại</button>
       <button id="btnLogout" class="btn btn-outline btn-sm" onclick="logoutStudent()">Đăng xuất</button>
     </div>
   </header>
@@ -65,6 +66,27 @@
     </div>
   </main>
 
+  <!-- Loi nhan sau khi dang nhap (hien 1 lan moi lan dang nhap) -->
+  <div id="welcomeModal" class="overlay" style="display: none; z-index: 140;">
+    <div class="lock-screen welcome-card" role="dialog" aria-labelledby="welcomeRulesTitle">
+      <div class="welcome-eyebrow">Lời nhắn từ chị Thảo</div>
+    
+      <div class="welcome-rules">
+        <div id="welcomeRulesTitle" class="welcome-rules-title">Nguyên tắc thưởng mỗi đề</div>
+        <div class="welcome-tier">
+          <span class="welcome-tier-score">7 đến 8 điểm</span>
+          <span class="welcome-tier-reward">5k</span>
+        </div>
+        <div class="welcome-tier welcome-tier-top">
+          <span class="welcome-tier-score">9 đến 10 điểm</span>
+          <span class="welcome-tier-reward">15k</span>
+        </div>
+      </div>
+
+      <button id="btnCloseWelcome" class="btn btn-primary btn-block" onclick="closeModal('welcomeModal')">Đóng</button>
+    </div>
+  </div>
+
   <!-- Man hinh 3: Khoa sau khi nop bai (Lockout Overlay) -->
   <div id="viewLockScreen" class="overlay" style="display: none;">
     <div class="lock-screen">
@@ -74,11 +96,13 @@
       <p id="finalSummary" style="font-size: 0.95rem; margin-bottom: 16px;">Đúng: -- / -- câu</p>
       
       <div class="alert-box alert-info" style="text-align: left; margin-bottom: 24px;">
-        Bài đã được lưu. Bạn có thể xem lịch sử làm bài hoặc thoát.
+        Bài đã được lưu. Bạn có thể xem lịch sử làm bài hoặc về trang đề thi.
       </div>
 
-      <button class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="backToList(true)">Xem lịch sử làm bài</button>
-      <button id="btnExitAfterSubmit" class="btn btn-outline btn-block" onclick="exitAfterSubmit()">Thoát</button>
+      <button id="btnHistoryAfterSubmit" class="btn btn-primary btn-block" style="margin-bottom: 10px;" onclick="backToList(true)">Xem lịch sử làm bài</button>
+      <button id="btnBackAfterSubmit" class="btn btn-outline btn-block" onclick="backToList()">Về trang đề thi</button>
+      <!-- Chi hien khi dang chay trong Safe Exam Browser (server tra trang thoat SEB) -->
+      <button id="btnSebQuit" class="btn btn-outline btn-block" style="display: none; margin-top: 10px;" onclick="quitSebAfterSubmit()">Thoát Safe Exam Browser</button>
     </div>
   </div>
 
@@ -100,9 +124,9 @@
       <div id="shieldTitle" class="lock-title" style="color: var(--danger);">BẠN ĐÃ RỜI BÀI THI</div>
       <p id="shieldReason" style="margin-bottom: 8px;"></p>
       <p id="shieldCount" class="field-hint" style="margin-bottom: 20px;"></p>
-      <!-- Bai bi khoa (roi bai nhieu lan): giam thi nhap ma 6 so cua de -->
+      <!-- Bai bi khoa (roi trang): giam thi nhap mat khau de (chung cho moi de) -->
       <form id="shieldLocked" style="display: none; margin-bottom: 10px;" onsubmit="event.preventDefault(); unlockLockedExam();">
-        <input type="password" id="shieldCode" class="form-control" placeholder="Mã giám thị 6 số" inputmode="numeric" maxlength="20" autocomplete="off" style="text-align: center; font-size: 1.2rem; letter-spacing: 2px; margin-bottom: 10px;">
+        <input type="password" id="shieldCode" class="form-control" placeholder="Mật khẩu đề" maxlength="100" autocomplete="off" style="text-align: center; font-size: 1.2rem; letter-spacing: 2px; margin-bottom: 10px;">
         <div id="shieldError" class="alert-box alert-danger" style="display: none; padding: 8px; font-size: 0.85rem;"></div>
         <button type="submit" id="btnShieldUnlock" class="btn btn-primary btn-block">Mở khoá (Giám thị)</button>
       </form>
@@ -111,7 +135,7 @@
     </div>
   </div>
 
-  <!-- Hop thoai nhap mat khau giam thi de thoat (moi lan thoat deu ghi log) -->
+  <!-- Hop thoai nhap mat khau de: thoat khan cap / mat khau vao de / cho lam lai (moi lan nhap deu ghi log) -->
   <div id="viewUnlockModal" class="overlay" style="display: none; z-index: 110;">
     <div class="lock-screen" style="max-width: 380px;">
       <h3 id="exitTitle" style="margin-bottom: 12px;">Xác nhận Giám thị</h3>
@@ -122,9 +146,9 @@
           <input type="text" id="exitReason" class="form-control" placeholder="Lý do thoát (vd: thí sinh mệt, mất điện...)">
         </div>
         <div class="form-group">
-          <input type="password" id="proctorInput" class="form-control" placeholder="Mã giám thị 6 số" inputmode="numeric" maxlength="20" autocomplete="off" style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
+          <input type="password" id="proctorInput" class="form-control" placeholder="Mật khẩu đề" maxlength="100" autocomplete="off" style="text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
         </div>
-        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mã giám thị không đúng!</div>
+        <div id="unlockError" class="alert-box alert-danger" style="display: none; padding: 8px; margin-bottom: 12px; font-size: 0.85rem;">Mật khẩu đề không đúng!</div>
 
         <div style="display: flex; gap: 10px;">
           <button type="button" class="btn btn-outline" style="flex: 1;" onclick="hideUnlockDialog()">Hủy</button>

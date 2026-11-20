@@ -53,7 +53,7 @@ Học sinh tải **safe-exam.apk** (nút "Tải app" hiện trên trang đăng n
 Trình duyệt thường không chặn được Alt+Tab / phím Windows. Muốn khoá hẳn máy tính: cài [Safe Exam Browser](https://safeexambrowser.org/download_en.html) (Windows / macOS / iPad) trên máy thi, rồi ở trang admin bấm **SEB** cạnh đề:
 - Bật **Bắt buộc làm trên Safe Exam Browser** → trình duyệt thường không lấy được đề.
 - Gửi **link `sebs://...`** (hoặc file `.seb`) cho học sinh: bấm vào là SEB mở đúng hệ thống thi.
-- Giám thị thoát bằng **mã 6 số của đề** trong bài thi như bình thường, SEB tự đóng.
+- Thoát khẩn cấp bằng **mật khẩu đề** (mật khẩu chung `PROCTOR_PASSWORD` hoặc mật khẩu riêng của đề): về danh sách đề, SEB không đóng. Nộp bài xong có nút **Thoát Safe Exam Browser** để SEB tự đóng.
 
 ### Nhập đề từ file JSON (không qua trang admin)
 
@@ -61,7 +61,7 @@ Trình duyệt thường không chặn được Alt+Tab / phím Windows. Muốn 
 npm run exam:import -- docs/de-mau/ten-de.json --dry-run   # chỉ kiểm tra
 npm run exam:import -- docs/de-mau/ten-de.json             # nhập thật
 ```
-Kiểm tra bằng đúng logic "Nhập JSON" của trang admin, tự chọn / tạo mẫu cấu trúc đề, tự kiểm tra "trả lời đúng hết = 10 điểm", tự sinh mã giám thị. Đề mẫu nằm trong `docs/de-mau/`.
+Kiểm tra bằng đúng logic "Nhập JSON" của trang admin, tự chọn / tạo mẫu cấu trúc đề, tự kiểm tra "trả lời đúng hết = 10 điểm", tự sinh mật khẩu riêng của đề. Đề mẫu nằm trong `docs/de-mau/`.
 
 **Mã đề** là số ngẫu nhiên 5 chữ số (10000–99999), database tự cấp khi tạo đề (migration `0006`), không theo thứ tự để học sinh không đoán được mã đề khác.
 

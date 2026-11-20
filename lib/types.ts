@@ -39,16 +39,19 @@ export interface ExamRow {
   duration_minutes: number | null;
   assigned_to?: string;
   questions: Question[] | null;
-  // Ma giam thi 6 so cua de: thoat khan cap, thoat ung dung, cho lam lai. KHONG BAO GIO gui cho thi sinh.
+  // Ma rieng 6 so cua de. Moi o nhap mat khau nhan ma nay HOAC mat khau chung PROCTOR_PASSWORD. KHONG BAO GIO gui cho thi sinh.
   proctor_code?: string | null;
   // Safe Exam Browser: bat buoc lam bai tren SEB; mat khau thoat SEB (chi admin xem)
   require_seb?: boolean;
   seb_quit_password?: string | null;
-  // Mat khau vao de (mac dinh tat): hoc sinh nhap moi bat dau lam duoc. Khac ma giam thi.
+  // Mat khau vao de (mac dinh tat): hoc sinh nhap mat khau de (chung hoac ma rieng cua de) moi bat dau lam duoc.
   require_password?: boolean;
+  // KHONG CON DUNG (de cu): mat khau vao de rieng tung de
   entry_password?: string | null;
   // Khoa bai khi hoc sinh roi trang (mac dinh tat: chi canh bao + ghi nhat ky)
   lock_on_leave?: boolean;
+  // Cho lam lai nhieu lan khong can mat khau (mac dinh tat: 1 luot, lam lai phai nhap mat khau de)
+  allow_retake?: boolean;
   created_at?: string;
 }
 
@@ -58,6 +61,8 @@ export type ExamSummary = Omit<ExamRow, "questions" | "proctor_code" | "seb_quit
 export interface EntryCredentials {
   password?: string;
   token?: string;
+  attemptTicket?: string; // ve luot dang lam (AttemptService)
+  submissionKey?: string; // khoa chong nop trung cua ban nhap tren may (kiem tra ban nhap da nop chua)
   ip: string;
 }
 
@@ -98,6 +103,8 @@ export interface ResultRow {
   answers: GradedEntry[] | null;
   action_logs?: LogEntry[];
   submitted_at: string | null;
+  // Khoa chong nop trung cua 1 luot lam bai (trinh duyet sinh, gui kem khi nop)
+  submission_key?: string | null;
 }
 
 export type NewResult = Omit<ResultRow, "id">;
@@ -114,6 +121,8 @@ export interface NewEvent {
   type: EventType;
   detail: string;
   action_logs: LogEntry[];
+  // CHO_LAM_LAI: so thu tu luot duoc mo (= so lan da nop + 1)
+  attempt?: number | null;
 }
 
 // ------------------------------------------------------------ Ket qua cham

@@ -1,18 +1,17 @@
-// Giam thi nhap ma 6 so cua de (admin xem / doi o trang quan tri) de:
+// Giam thi nhap MAT KHAU DE (mat khau chung PROCTOR_PASSWORD hoac ma rieng 6 so cua de) de:
 //   - thi sinh thoat khan cap (THOAT_KHAN_CAP) / thoat ung dung sau khi nop (THOAT_UNG_DUNG)
 //   - mo khoa bai thi bi khoa vi roi trang nhieu lan (MO_KHOA)
 //   - cho thi sinh lam lai them 1 luot (CHO_LAM_LAI)
-// Dung / sai deu ghi vao exam_events. De cu chua co ma -> chap nhan PROCTOR_PASSWORD trong .env.
+// Dung / sai deu ghi vao exam_events. Thoat khan cap xong thi sinh ve danh sach de (khong dong app / SEB).
 import type { Config } from "../config.ts";
 import { ConflictError, UnauthorizedError, ValidationError } from "../errors.ts";
 import type { EventStore } from "../repositories/EventRepository.ts";
 import type { ExamStore } from "../repositories/ExamRepository.ts";
 import type { RateLimiter } from "../security/RateLimiter.ts";
-import { secureCompare } from "../security/secureCompare.ts";
-import type { ClientInfo, EventType, ExamRow, UntrustedBody } from "../types.ts";
+import { matchesExamPassword } from "../security/examPassword.ts";
+import type { EventType, ExamRow, UntrustedBody } from "../types.ts";
 import { cleanLogs, cleanString, isId } from "../utils/input.ts";
 import type { AttemptService } from "./AttemptService.ts";
-import { generateProctorCode } from "../security/proctorCode.ts";
 
 type ExitType = Extract<EventType, "THOAT_KHAN_CAP" | "THOAT_UNG_DUNG" | "MO_KHOA">;
 const EXIT_TYPES: readonly ExitType[] = ["THOAT_KHAN_CAP", "THOAT_UNG_DUNG", "MO_KHOA"];
@@ -31,16 +30,16 @@ export interface ProctorServiceDeps {
   events: EventStore;
   attempts: AttemptService;
   limiter: RateLimiter;
-  // Trang thoat SEB cua de (SebConfigService.quitUrl): dang chay trong SEB thi tra ve de app mo -> SEB tu dong
-  sebQuitUrl?: (examId: number, origin: string) => string;
-  // Sinh ma giam thi moi (doi ma sau moi lan cho lam lai)
-  generateCode?: () => string;
+  // Chong do mat khau theo may (IP), dung chung voi EntryPasswordService: 1 mat khau cho moi de
+  // nen doi ten thi sinh / doi de cung khong duoc them luot do
+  ipLimiter?: RateLimiter;
 }
 
 interface Target {
   exam: ExamRow | null;
   base: { exam_id: number | null; exam_title: string | null; student_name: string };
   lockKey: string;
+  ip: string;
 }
 
 export class ProctorService {
@@ -49,12 +48,10 @@ export class ProctorService {
   private readonly events: EventStore;
   private readonly attempts: AttemptService;
   private readonly limiter: RateLimiter;
-  private readonly sebQuitUrl?: (examId: number, origin: string) => string;
-  private readonly generateCode: () => string;
+  private readonly ipLimiter?: RateLimiter;
 
-  constructor({ config, exams, events, attempts, limiter, sebQuitUrl, generateCode = generateProctorCode }: ProctorServiceDeps) {
-    this.sebQuitUrl = sebQuitUrl;
-    this.generateCode = generateCode;
+  constructor({ config, exams, events, attempts, limiter, ipLimiter }: ProctorServiceDeps) {
+    this.ipLimiter = ipLimiter;
     this.config = config;
     this.exams = exams;
     this.events = events;
@@ -63,40 +60,28 @@ export class ProctorService {
   }
 
   // payload: { password, type, student_name, exam_id, detail, action_logs }
-  async authorizeExit(payload: UntrustedBody, clientIp: string, client?: ClientInfo): Promise<{ ok: true; seb_quit_url?: string }> {
+  async authorizeExit(payload: UntrustedBody, clientIp: string): Promise<{ ok: true }> {
     const type: ExitType = isExitType(payload.type) ? payload.type : "THOAT_UNG_DUNG";
     const target = await this.target(payload, clientIp);
     await this.verify(target, payload.password, type);
     await this.events.create({ ...target.base, type, detail: cleanString(payload.detail, 1000), action_logs: cleanLogs(payload.action_logs) });
-    // Thoat (khong phai mo khoa) trong SEB -> tra trang thoat SEB de app mo, SEB tu dong
-    const quit = type !== "MO_KHOA" && client?.isSeb && target.exam && this.sebQuitUrl ? this.sebQuitUrl(target.exam.id, client.origin) : undefined;
-    return quit ? { ok: true, seb_quit_url: quit } : { ok: true };
+    return { ok: true };
   }
 
   // Cho thi sinh lam them 1 luot. payload: { password, student_name, exam_id }
-  // Dung xong ma giam thi TU DOI (ma dung 1 lan cho viec lam lai): ai nhin trom ma cung khong dung lai duoc.
   async grantRetake(payload: UntrustedBody, clientIp: string): Promise<{ ok: true; attempt: number }> {
     const target = await this.target(payload, clientIp);
     if (!target.exam) throw new ValidationError("Thiếu mã đề.");
     if (!cleanString(payload.student_name)) throw new ValidationError("Thiếu tên thí sinh.");
 
-    const status = await this.attempts.status(target.exam.id, target.base.student_name);
-    // Con luot chua dung (vd: vua duoc cho lam lai roi tai lai trang) -> khong cap them
-    if (status.canStart) throw new ConflictError("Thí sinh vẫn còn lượt làm bài, không cần nhập mã.");
+    const status = await this.attempts.status(target.exam, target.base.student_name);
+    // Con luot chua dung (vd: vua duoc cho lam lai roi tai lai trang / de cho lam lai nhieu lan) -> khong cap them
+    if (status.canStart) throw new ConflictError("Thí sinh vẫn còn lượt làm bài, không cần nhập mật khẩu.");
 
     await this.verify(target, payload.password, "CHO_LAM_LAI");
-    const attempt = status.allowed + 1;
-    if (target.exam.proctor_code) {
-      let code = this.generateCode();
-      if (code === target.exam.proctor_code) code = this.generateCode();
-      await this.exams.setProctorCode(target.exam.id, code);
-    }
-    await this.events.create({
-      ...target.base,
-      type: "CHO_LAM_LAI",
-      detail: `Giám thị cho làm lại: lượt thứ ${attempt}.${target.exam.proctor_code ? " Mã giám thị của đề đã tự đổi (xem mã mới ở nút chìa khoá)." : ""}`,
-      action_logs: []
-    });
+    // Mo dung 1 luot tinh tu so lan da nop (khong phai so luot da cap)
+    const attempt = status.used + 1;
+    await this.events.create({ ...target.base, type: "CHO_LAM_LAI", detail: `Giám thị cho làm lại: lượt thứ ${attempt}.`, action_logs: [], attempt });
     return { ok: true, attempt };
   }
 
@@ -106,29 +91,30 @@ export class ProctorService {
     return {
       exam,
       base: { exam_id: exam?.id ?? null, exam_title: exam?.title ?? null, student_name: student || "(không rõ)" },
-      lockKey: `${clientIp}:${student}`
+      lockKey: `${clientIp}:${student}`,
+      ip: clientIp
     };
   }
 
-  // Ma cua de neu de da co ma; de cu (chua co ma) / khong ro de -> mat khau chung trong .env
-  private expectedCode(exam: ExamRow | null): string {
-    return exam?.proctor_code || this.config.proctorPassword;
-  }
-
   private async verify(target: Target, password: unknown, action: Exclude<EventType, "SAI_MAT_KHAU">): Promise<void> {
+    const ipKey = `pw:${target.ip}`;
+    this.ipLimiter?.assertNotLocked(ipKey);
     this.limiter.assertNotLocked(target.lockKey);
-    if (secureCompare(cleanString(password, 100), this.expectedCode(target.exam))) {
+    // Mat khau chung (PROCTOR_PASSWORD) hoac ma rieng cua dung de nay
+    if (matchesExamPassword(cleanString(password, 100), target.exam, this.config.proctorPassword)) {
       this.limiter.reset(target.lockKey);
+      this.ipLimiter?.reset(ipKey);
       return;
     }
+    this.ipLimiter?.recordFailure(ipKey);
     const left = this.limiter.recordFailure(target.lockKey);
     // Ghi su co sai ma; loi ghi khong duoc lam lech thong bao cho giam thi
     await this.events.create({
       ...target.base,
       type: "SAI_MAT_KHAU",
-      detail: `Nhập sai mã giám thị khi ${ACTION_LABEL[action]}.`,
+      detail: `Nhập sai mật khẩu đề khi ${ACTION_LABEL[action]}.`,
       action_logs: []
     }).catch(() => { });
-    throw new UnauthorizedError(left ? `Mã giám thị không đúng! Còn ${left} lần thử.` : `Mã giám thị không đúng! Đã tạm khoá ${this.limiter.lockMinutes} phút.`);
+    throw new UnauthorizedError(left ? `Mật khẩu đề không đúng! Còn ${left} lần thử.` : `Mật khẩu đề không đúng! Đã tạm khoá ${this.limiter.lockMinutes} phút.`);
   }
 }

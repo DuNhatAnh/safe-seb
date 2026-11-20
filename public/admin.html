@@ -347,16 +347,34 @@
   </div>
 
   <!-- Modal: Chi tiet bai lam + cham tu luan -->
-  <!-- Modal: Ma giam thi 6 so cua de (thoat khan cap, thoat ung dung, cho lam lai) -->
+  <!-- Modal: Mat khau de (ma rieng cua de + mat khau chung) + cai dat lam bai cua de -->
   <div id="proctorCodeModal" class="overlay" style="display: none; z-index: 130;">
     <div class="lock-screen" style="max-width: 380px;">
-      <h3 id="proctorCodeTitle" style="margin-bottom: 6px;">Mã giám thị</h3>
-      <p class="field-hint" style="margin-bottom: 4px;">Đưa mã này cho giám thị phòng thi. Dùng để: thoát khẩn cấp, mở khoá bài, cho thí sinh làm lại. <strong>Mỗi lần cho làm lại, mã tự đổi</strong> — mở lại hộp này để xem mã mới.</p>
+      <h3 id="proctorCodeTitle" style="margin-bottom: 6px;">Mật khẩu đề</h3>
+      <p class="field-hint" style="margin-bottom: 8px;">Mọi ô nhập mật khẩu (vào đề nếu bật bên dưới, cho làm lại, mở khoá bài, thoát khẩn cấp) nhận <strong>một trong hai</strong> mật khẩu dưới đây.</p>
+
+      <div style="text-align: left; font-weight: 600; margin-top: 4px;">Mật khẩu riêng của đề này</div>
       <div id="proctorCodeValue" class="proctor-code">······</div>
       <div style="display: flex; gap: 8px;">
         <button class="btn btn-primary" style="flex: 1;" onclick="copyText(document.getElementById('proctorCodeValue').textContent, this)">Sao chép</button>
-        <button class="btn btn-outline" style="flex: 1;" onclick="regenerateProctorCode()">Đổi mã mới</button>
+        <button class="btn btn-outline" style="flex: 1;" onclick="regenerateProctorCode()">Đổi mật khẩu riêng</button>
+      </div>
+
+      <div style="text-align: left; font-weight: 600; margin-top: 16px;">Mật khẩu chung (mặc định, mọi đề)</div>
+      <div id="commonPasswordValue" class="proctor-code" style="font-size: 1.6rem;">······</div>
+      <p class="field-hint" style="margin-bottom: 8px;">Muốn đổi: sửa biến môi trường <code>PROCTOR_PASSWORD</code> trên máy chủ, <strong>chỉ đổi khi không có ca thi</strong> (học sinh đang làm đề có mật khẩu vào đề sẽ phải nhập lại).</p>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-outline" style="flex: 1;" onclick="copyText(document.getElementById('commonPasswordValue').textContent, this)">Sao chép</button>
         <button class="btn btn-outline" onclick="closeModal('proctorCodeModal')">Đóng</button>
+      </div>
+
+      <!-- Cho lam lai nhieu lan (mac dinh tat: 1 luot, lam lai phai nhap mat khau de) -->
+      <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; text-align: left;">
+        <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
+          <input type="checkbox" id="allowRetakeEnabled" onchange="toggleAllowRetake()" style="margin-top: 4px;">
+          <span><strong>Cho làm lại nhiều lần</strong><br>
+            <span class="field-hint">Tắt (mặc định): mỗi thí sinh làm 1 lần, muốn làm lại phải nhập mật khẩu đề. Bật: thí sinh tự bấm "Làm lại" bao nhiêu lần cũng được, không cần mật khẩu.</span></span>
+        </label>
       </div>
 
       <!-- Khoa bai khi roi trang (mac dinh tat) -->
@@ -364,22 +382,17 @@
         <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
           <input type="checkbox" id="lockOnLeaveEnabled" onchange="toggleLockOnLeave()" style="margin-top: 4px;">
           <span><strong>Khoá bài khi học sinh rời trang</strong><br>
-            <span class="field-hint">Tắt (mặc định): rời trang chỉ bị cảnh báo và ghi nhật ký, học sinh tự quay lại làm tiếp. Bật: rời trang là bài bị khoá, giám thị nhập mã giám thị ở trên mới mở được.</span></span>
+            <span class="field-hint">Tắt (mặc định): rời trang chỉ bị cảnh báo và ghi nhật ký, học sinh tự quay lại làm tiếp. Bật: rời trang là bài bị khoá, giám thị nhập mật khẩu đề ở trên mới mở được.</span></span>
         </label>
       </div>
 
-      <!-- Mat khau vao de (mac dinh tat), khac ma giam thi -->
+      <!-- Mat khau vao de (mac dinh tat), dung mat khau chung o tren -->
       <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; text-align: left;">
         <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
           <input type="checkbox" id="entryPasswordEnabled" onchange="toggleEntryPassword()" style="margin-top: 4px;">
           <span><strong>Mật khẩu vào đề</strong><br>
-            <span class="field-hint">Bật: học sinh phải nhập mật khẩu (giám thị đọc khi phát đề) mới bắt đầu làm được. Khác mã giám thị ở trên, nên đọc to cho cả phòng không lộ mã giám thị.</span></span>
+            <span class="field-hint">Bật: học sinh phải nhập mật khẩu đề ở trên mới bắt đầu làm được. <strong>Lưu ý:</strong> mật khẩu này cũng dùng được để cho làm lại, mở khoá bài và thoát khẩn cấp. Nên đọc to <em>mật khẩu riêng của đề</em> (không phải mật khẩu chung) để học sinh không dùng được ở đề khác.</span></span>
         </label>
-        <div id="entryPasswordBox" style="display: none; gap: 8px; align-items: center; margin-top: 10px;">
-          <div id="entryPasswordValue" class="proctor-code" style="font-size: 1.6rem; margin: 0; flex: 1; text-align: center;">······</div>
-          <button class="btn btn-outline btn-sm" onclick="copyText(document.getElementById('entryPasswordValue').textContent, this)">Sao chép</button>
-          <button class="btn btn-outline btn-sm" onclick="regenerateEntryPassword()">Đổi</button>
-        </div>
       </div>
     </div>
   </div>
@@ -410,7 +423,7 @@
         <button class="btn btn-outline btn-sm" onclick="copyText(document.getElementById('sebQuitPassword').textContent, this)">Sao chép</button>
         <button class="btn btn-outline btn-sm" onclick="regenerateSebPassword()">Đổi</button>
       </div>
-      <p class="field-hint">Bình thường giám thị thoát bằng <strong>mã giám thị 6 số</strong> trong bài thi (SEB tự đóng). Mật khẩu này chỉ dùng cho nút thoát của chính SEB khi không vào được bài thi.</p>
+      <p class="field-hint">Bình thường giám thị thoát bằng <strong>mật khẩu đề</strong> trong bài thi (SEB tự đóng). Mật khẩu này chỉ dùng cho nút thoát của chính SEB khi không vào được bài thi.</p>
     </div>
   </div>
 

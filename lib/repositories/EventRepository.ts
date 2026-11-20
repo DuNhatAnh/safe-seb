@@ -1,11 +1,11 @@
 // Truy van bang exam_events - su co phong thi (qua interface Database, khong biet Supabase)
 import type { Database } from "../infra/database/Database.ts";
-import type { EventType, NewEvent } from "../types.ts";
+import type { NewEvent } from "../types.ts";
 
 export interface EventStore {
   create(event: NewEvent): Promise<unknown>;
-  // So su co loai `type` cua thi sinh trong de (vd: so lan duoc cho lam lai)
-  count(examId: number, studentName: string, type: EventType): Promise<number>;
+  // Cac lan giam thi cho thi sinh lam lai de nay: so thu tu luot duoc mo (su co cu: null)
+  retakeGrants(examId: number, studentName: string): Promise<(number | null)[]>;
 }
 
 export class EventRepository implements EventStore {
@@ -19,8 +19,11 @@ export class EventRepository implements EventStore {
     return this.db.insert("exam_events", event);
   }
 
-  async count(examId: number, studentName: string, type: EventType): Promise<number> {
-    const rows = await this.db.select("exam_events", { columns: ["id"], filter: { exam_id: examId, student_name: studentName, type } });
-    return rows.length;
+  async retakeGrants(examId: number, studentName: string): Promise<(number | null)[]> {
+    const rows = await this.db.select<{ attempt?: number | null }>("exam_events", {
+      columns: ["id", "attempt"],
+      filter: { exam_id: examId, student_name: studentName, type: "CHO_LAM_LAI" }
+    });
+    return rows.map(r => (r.attempt == null ? null : Number(r.attempt)));
   }
 }

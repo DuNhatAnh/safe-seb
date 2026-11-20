@@ -28,7 +28,8 @@ import { SupabaseDatabase } from "../lib/infra/database/SupabaseDatabase.ts";
 import type { AppError } from "../lib/errors.ts";
 import type { ClientInfo, ExamRow } from "../lib/types.ts";
 
-const CODE = "135790";
+const CODE = "135790";      // ma rieng 6 so cua de 1
+const PASS = "30080404";    // mat khau chung cua moi de (PROCTOR_PASSWORD)
 const EXAM: ExamRow = {
   id: 1,
   title: "Đề thử",
@@ -46,7 +47,7 @@ const RIGHT = { 0: 1, 1: [true, false, true, false], 2: "1/2", 3: "hà  nội" }
 
 const grading = new GradingService();
 
-// De cu (truoc khi co ma giam thi) -> dung PROCTOR_PASSWORD trong .env
+// De cu (chua co ma rieng): chi nhan mat khau chung
 const LEGACY_EXAM: ExamRow = { id: 2, title: "Đề cũ", duration_minutes: 10, questions: EXAM.questions, proctor_code: null };
 
 // Service + repository THAT tren MemoryDatabase (cung interface Database voi SupabaseDatabase)
@@ -55,9 +56,9 @@ function setup() {
   const exams = new ExamRepository(db);
   const resultsRepo = new ResultRepository(db);
   const eventsRepo = new EventRepository(db);
-  const config = new Config({ ADMIN_PASSWORD: "admin-pass", PROCTOR_PASSWORD: "gt-pass", SESSION_SECRET: "s".repeat(32) });
-  const attempts = new AttemptService({ results: resultsRepo, events: eventsRepo });
-  const examService = new ExamService({ exams, attempts, grading });
+  const config = new Config({ ADMIN_PASSWORD: "admin-pass", PROCTOR_PASSWORD: PASS, SESSION_SECRET: "s".repeat(32) });
+  const attempts = new AttemptService({ results: resultsRepo, events: eventsRepo, ticketSecret: () => "t".repeat(32) });
+  const examService = new ExamService({ exams, attempts, grading, results: resultsRepo });
   return {
     db, config, examService,
     results: db.rows("exam_results"),
@@ -65,7 +66,7 @@ function setup() {
     examRow: (id: number) => db.rows("exams").find(e => e.id === id),
     submissions: new SubmissionService({ examService, results: resultsRepo, attempts, grading }),
     proctor: new ProctorService({ config, exams, events: eventsRepo, attempts, limiter: new RateLimiter({ maxFails: 3 }) }),
-    codes: new ProctorCodeService({ exams })
+    codes: new ProctorCodeService({ config, exams })
   };
 }
 
@@ -113,32 +114,36 @@ test("giám thị: sai mã ghi SAI_MAT_KHAU, sai 3 lần thì khoá kể cả nh
   const { proctor, events } = setup();
   const body = { type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1 };
   for (let i = 0; i < 3; i++) await assert.rejects(proctor.authorizeExit({ ...body, password: "sai" }, "ip"), (e: AppError) => e.status === 401);
-  await assert.rejects(proctor.authorizeExit({ ...body, password: CODE }, "ip"), (e: AppError) => e.status === 429);
+  await assert.rejects(proctor.authorizeExit({ ...body, password: PASS }, "ip"), (e: AppError) => e.status === 429);
   assert.equal(events.filter(e => e.type === "SAI_MAT_KHAU").length, 3);
   // may khac khong bi anh huong
-  assert.deepEqual(await proctor.authorizeExit({ ...body, password: CODE, detail: "mệt" }, "ip-2"), { ok: true });
+  assert.deepEqual(await proctor.authorizeExit({ ...body, password: PASS, detail: "mệt" }, "ip-2"), { ok: true });
   assert.equal(events.at(-1)?.type, "THOAT_KHAN_CAP");
 });
 
-test("mã giám thị theo đề: đề có mã thì mật khẩu chung không dùng được; đề cũ dùng mật khẩu chung", async () => {
+test("mật khẩu đề: nhận mật khẩu chung hoặc mã riêng của đúng đề đó; mã của đề khác không dùng được", async () => {
   const { proctor } = setup();
-  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "a", exam_id: 1, password: "gt-pass" }, "ip"), (e: AppError) => e.status === 401);
-  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "b", exam_id: 2, password: "gt-pass" }, "ip"), { ok: true });
-  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "c", exam_id: 2, password: CODE }, "ip"), (e: AppError) => e.status === 401);
+  const exit = (exam_id: number, password: string, student_name: string) =>
+    proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name, exam_id, password }, "ip");
+  assert.deepEqual(await exit(1, PASS, "a"), { ok: true });   // mat khau chung
+  assert.deepEqual(await exit(1, CODE, "b"), { ok: true });   // ma rieng cua de 1
+  assert.deepEqual(await exit(2, PASS, "c"), { ok: true });   // de chua co ma rieng: mat khau chung
+  await assert.rejects(exit(2, CODE, "d"), (e: AppError) => e.status === 401); // ma cua de 1 khong dung cho de 2
+  await assert.rejects(exit(1, "000000", "e"), (e: AppError) => e.status === 401);
 });
 
-test("làm lại: hết lượt cần mã giám thị, mỗi lần nhập đúng thêm 1 lượt", async () => {
+test("làm lại (mặc định): hết lượt cần mật khẩu đề, mỗi lần nhập đúng thêm 1 lượt", async () => {
   const { submissions, examService, proctor, events } = setup();
   const retake = (password: string) => proctor.grantRetake({ exam_id: 1, student_name: "hs", password }, "ip");
 
   // Con luot thi khong can (va khong duoc) cap them
-  await assert.rejects(retake(CODE), (e: AppError) => e.status === 409);
+  await assert.rejects(retake(PASS), (e: AppError) => e.status === 409);
   await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
 
   // Het luot: khong lay duoc de, server bao can giam thi
   await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409 && e.extra.needsProctor === true);
   await assert.rejects(retake("000000"), (e: AppError) => e.status === 401);
-  assert.deepEqual(await retake(CODE), { ok: true, attempt: 2 });
+  assert.deepEqual(await retake(PASS), { ok: true, attempt: 2 });
   assert.equal(events.at(-1)?.type, "CHO_LAM_LAI");
 
   // Lan 2: lay de + nop duoc, diem moi
@@ -148,23 +153,100 @@ test("làm lại: hết lượt cần mã giám thị, mỗi lần nhập đúng
   const history = await submissions.history("hs");
   assert.equal(history.total, 2);
 
-  // Lan 3 lai can ma
+  // Lan 3 lai can mat khau; ma rieng cua de cung cho lam lai duoc
   await assert.rejects(submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT }), (e: AppError) => e.status === 409);
+  assert.deepEqual(await retake(CODE), { ok: true, attempt: 3 });
   // Thi sinh khac khong bi anh huong
   await examService.getExamForStudent(1, "hs-khac");
 });
 
-test("admin xem / đổi mã giám thị; đề cũ được tạo mã khi xem", async () => {
-  const { codes, examRow } = setup();
-  assert.deepEqual(await codes.getCode(1), { exam_id: 1, code: CODE });
+test("admin xem mật khẩu đề: mã riêng của đề + mật khẩu chung; đổi mã riêng; đề cũ được tạo mã khi xem", async () => {
+  const { codes, examRow, proctor } = setup();
+  assert.deepEqual(await codes.getCode(1), { exam_id: 1, code: CODE, common: PASS });
   const fresh = await codes.getCode(1, true);
   assert.match(fresh.code, /^\d{6}$/);
   assert.notEqual(fresh.code, CODE);
+  assert.equal(fresh.common, PASS);
   assert.equal(examRow(1)?.proctor_code, fresh.code);
+  // Ma rieng cu het hieu luc, ma moi + mat khau chung dung duoc
+  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "a", exam_id: 1, password: CODE }, "ip"), (e: AppError) => e.status === 401);
+  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "b", exam_id: 1, password: fresh.code }, "ip"), { ok: true });
   const legacy = await codes.getCode(2);
   assert.match(legacy.code, /^\d{6}$/);
   assert.equal(examRow(2)?.proctor_code, legacy.code);
   await assert.rejects(codes.getCode(99), (e: AppError) => e.status === 404);
+});
+
+test("cho làm lại nhiều lần: đề bật thì làm lại không cần mật khẩu, không cần giám thị", async () => {
+  const { submissions, examService, proctor, db } = setup();
+  await db.update("exams", { id: 1 }, { allow_retake: true });
+  for (let i = 0; i < 3; i++) {
+    await examService.getExamForStudent(1, "hs");
+    await submissions.submit({ exam_id: 1, student_name: "hs", answers: i === 2 ? RIGHT : {} });
+  }
+  assert.equal((await submissions.history("hs")).total, 3);
+  // Con luot -> khong can (va khong duoc) nhap mat khau cho lam lai
+  await assert.rejects(proctor.grantRetake({ exam_id: 1, student_name: "hs", password: PASS }, "ip"), (e: AppError) => e.status === 409);
+  // Tat lai -> ve mac dinh: het luot, phai nhap mat khau de
+  await db.update("exams", { id: 1 }, { allow_retake: false });
+  await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409 && e.extra.needsProctor === true);
+  // Da nop 3 luot luc de bat -> giam thi cho lam lai van mo duoc DUNG 1 luot (luot thu 4), khong bi ket
+  assert.deepEqual(await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: PASS }, "ip"), { ok: true, attempt: 4 });
+  await examService.getExamForStudent(1, "hs");
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT });
+  await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409);
+  assert.deepEqual(await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: PASS }, "ip"), { ok: true, attempt: 5 });
+  await examService.getExamForStudent(1, "hs");
+});
+
+test("chống nộp trùng: nộp lại cùng khoá lượt (mất phản hồi) trả kết quả cũ, kể cả đề cho làm lại nhiều lần", async () => {
+  const { submissions, db, results } = setup();
+  await db.update("exams", { id: 1 }, { allow_retake: true });
+  const first = await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, submission_key: "luot-1" });
+  await assert.rejects(
+    submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, submission_key: "luot-1" }),
+    (e: AppError) => e.status === 409 && (e.extra.result as { id: number; earned: number }).id === first.id && (e.extra.result as { earned: number }).earned === 4
+  );
+  assert.equal(results.length, 1);
+  // Luot moi (khoa moi) van nop duoc; thi sinh khac dung trung khoa khong anh huong
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: {}, submission_key: "luot-2" });
+  await submissions.submit({ exam_id: 1, student_name: "hs-khac", answers: {}, submission_key: "luot-1" });
+  assert.equal(results.length, 3);
+});
+
+test("chống dò mật khẩu chung theo IP: đổi tên / đổi chỗ nhập (vào đề, giám thị) vẫn bị tính chung", async () => {
+  const { config, db } = setup();
+  const exams = new ExamRepository(db);
+  const events = new EventRepository(db);
+  const attempts = new AttemptService({ results: new ResultRepository(db), events });
+  const ipLimiter = new RateLimiter({ maxFails: 4 });
+  const proctor = new ProctorService({ config, exams, events, attempts, limiter: new RateLimiter({ maxFails: 3 }), ipLimiter });
+  const entry = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter({ maxFails: 3 }), ipLimiter });
+  await db.update("exams", { id: 1 }, { require_password: true });
+  const exam = (await exams.findById(1))!;
+  // 2 lan sai o thoat khan cap (2 ten khac nhau) + 2 lan sai o mat khau vao de -> khoa may
+  for (const name of ["a", "b"]) {
+    await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: name, exam_id: 1, password: "sai" }, "ip-x"), (e: AppError) => e.status === 401);
+  }
+  for (const name of ["c", "d"]) {
+    await assert.rejects(entry.admit(exam, name, { ip: "ip-x", password: "sai" }), (e: AppError) => e.status === 401);
+  }
+  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "e", exam_id: 1, password: PASS }, "ip-x"), (e: AppError) => e.status === 429);
+  await assert.rejects(entry.admit(exam, "f", { ip: "ip-x", password: PASS }), (e: AppError) => e.status === 429);
+  // May khac khong bi anh huong
+  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "e", exam_id: 1, password: PASS }, "ip-y"), { ok: true });
+});
+
+test("nộp bài trong SEB: trả trang thoát SEB (nút \"Thoát Safe Exam Browser\"); trình duyệt thường thì không", async () => {
+  const db = new MemoryDatabase({ exams: [EXAM] });
+  const results = new ResultRepository(db);
+  const attempts = new AttemptService({ results, events: new EventRepository(db) });
+  const examService = new ExamService({ exams: new ExamRepository(db), attempts, grading });
+  const submissions = new SubmissionService({ examService, results, attempts, grading, sebQuitUrl: (id, origin) => `${origin}/seb-quit.html?exam=${id}` });
+  const inSeb = await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} }, SEB);
+  assert.equal(inSeb.seb_quit_url, "https://thi.example.edu.vn/seb-quit.html?exam=1");
+  const normal = await submissions.submit({ exam_id: 1, student_name: "hs2", answers: {} }, BROWSER);
+  assert.equal(normal.seb_quit_url, undefined);
 });
 
 test("admin: token đúng qua, token sửa / hết hạn bị chặn", () => {
@@ -215,12 +297,13 @@ test("IP chống dò mật khẩu: không tin X-Forwarded-For khi chạy thẳng
   assert.equal(Router.clientIp(req, true), "1.2.3.4");
 });
 
-test("mở khoá bài thi bị khoá: cần mã của đề, ghi MO_KHOA", async () => {
+test("mở khoá bài thi bị khoá: cần mật khẩu đề (chung hoặc riêng), ghi MO_KHOA", async () => {
   const { proctor, events } = setup();
   const body = { type: "MO_KHOA", student_name: "hs", exam_id: 1, detail: "rời bài 2 lần" };
-  await assert.rejects(proctor.authorizeExit({ ...body, password: "gt-pass" }, "ip"), (e: AppError) => e.status === 401);
+  await assert.rejects(proctor.authorizeExit({ ...body, password: "000000" }, "ip"), (e: AppError) => e.status === 401);
+  assert.deepEqual(await proctor.authorizeExit({ ...body, password: PASS }, "ip"), { ok: true });
   assert.deepEqual(await proctor.authorizeExit({ ...body, password: CODE }, "ip"), { ok: true });
-  assert.deepEqual(events.map(e => e.type), ["SAI_MAT_KHAU", "MO_KHOA"]);
+  assert.deepEqual(events.map(e => e.type), ["SAI_MAT_KHAU", "MO_KHOA", "MO_KHOA"]);
 });
 
 test("SupabaseDatabase: dịch interface Database sang đúng truy vấn PostgREST", async () => {
@@ -312,19 +395,11 @@ test("SEB: cài đặt admin, đổi mật khẩu thoát, link seb:// / sebs://"
   assert.ok(b.quit_password.length >= 16);
 });
 
-test("SEB: giám thị nhập đúng mã khi thoát trong SEB → trả trang thoát để SEB tự đóng", async () => {
-  const { proctor } = setup();
-  const withQuit = new ProctorService({
-    config: setup().config, exams: new ExamRepository(new MemoryDatabase({ exams: [EXAM] })),
-    events: new EventRepository(new MemoryDatabase()),
-    attempts: new AttemptService({ results: new ResultRepository(new MemoryDatabase()), events: new EventRepository(new MemoryDatabase()) }),
-    limiter: new RateLimiter(), sebQuitUrl: (id, origin) => `${origin}/seb-quit.html?exam=${id}`
-  });
-  const body = { type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: CODE };
-  assert.deepEqual(await withQuit.authorizeExit(body, "ip", SEB), { ok: true, seb_quit_url: "https://thi.example.edu.vn/seb-quit.html?exam=1" });
-  assert.deepEqual(await withQuit.authorizeExit(body, "ip", BROWSER), { ok: true });
-  assert.deepEqual(await withQuit.authorizeExit({ ...body, type: "MO_KHOA" }, "ip", SEB), { ok: true }); // mo khoa: lam tiep, khong thoat
-  assert.deepEqual(await proctor.authorizeExit(body, "ip", SEB), { ok: true }); // khong cau hinh trang thoat
+test("thoát khẩn cấp đúng mật khẩu: chỉ ghi sự cố, không trả trang thoát SEB (thí sinh về danh sách đề)", async () => {
+  const { proctor, events } = setup();
+  const body = { type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: PASS };
+  assert.deepEqual(await proctor.authorizeExit(body, "ip"), { ok: true });
+  assert.equal(events.at(-1)?.type, "THOAT_KHAN_CAP");
 });
 
 test("Router nhận diện Safe Exam Browser và địa chỉ trang", () => {
@@ -344,37 +419,37 @@ function entrySetup() {
   const exams = new ExamRepository(db);
   const results = new ResultRepository(db);
   const events = new EventRepository(db);
-  const config = new Config({ SESSION_SECRET: "s".repeat(32) });
+  let password = PASS;
+  const config = new Config({ get SESSION_SECRET() { return "s".repeat(32); }, get PROCTOR_PASSWORD() { return password; } });
   const attempts = new AttemptService({ results, events });
-  let n = 0;
-  const entry = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter({ maxFails: 3 }), generate: () => ["111111", "222222", "333333"][n++] });
+  const entry = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter({ maxFails: 3 }) });
   const examService = new ExamService({ exams, attempts, grading, entryPasswords: entry });
-  return { db, entry, examService, submissions: new SubmissionService({ examService, results, attempts, grading }) };
+  return { db, entry, examService, submissions: new SubmissionService({ examService, results, attempts, grading }), setPassword: (p: string) => { password = p; } };
 }
 
 test("mật khẩu vào đề: mặc định tắt, vào tự do", async () => {
   const { entry, examService } = entrySetup();
-  assert.deepEqual(await entry.settings(1), { exam_id: 1, enabled: false, password: null });
+  assert.deepEqual(await entry.settings(1), { exam_id: 1, enabled: false });
   const exam = await examService.getExamForStudent(1, "hs", undefined, { ip: "ip" });
   assert.equal(exam.entry_token, undefined);
 });
 
-test("mật khẩu vào đề: bật thì phải nhập đúng; vé vào đề dùng lại được; đổi mật khẩu thì vé cũ hết hạn", async () => {
-  const { entry, examService, db } = entrySetup();
-  assert.deepEqual(await entry.settings(1, { enabled: true }), { exam_id: 1, enabled: true, password: "111111" });
+test("mật khẩu vào đề: bật thì nhập mật khẩu chung hoặc mã riêng của đề; vé vào đề dùng lại được; đổi mật khẩu thì vé cũ hết hạn", async () => {
+  const { entry, examService, db, setPassword } = entrySetup();
+  assert.deepEqual(await entry.settings(1, { enabled: true }), { exam_id: 1, enabled: true });
 
   await assert.rejects(examService.getExamForStudent(1, "hs", undefined, { ip: "ip" }), (e: AppError) => e.status === 401 && e.extra.needsPassword === true);
   await assert.rejects(examService.getExamForStudent(1, "hs", undefined, { ip: "ip", password: "999999" }), (e: AppError) => e.status === 401 && /Còn 2 lần/.test(e.message));
   assert.equal(db.rows("exam_events").at(-1)?.type, "SAI_MAT_KHAU");
-  // Mat khau vao de KHONG phai ma giam thi
-  await assert.rejects(examService.getExamForStudent(1, "hs", undefined, { ip: "ip2", password: CODE }), (e: AppError) => e.status === 401);
+  // Ma rieng cua de cung vao duoc
+  assert.ok((await examService.getExamForStudent(1, "hs-ma-rieng", undefined, { ip: "ip2", password: CODE })).entry_token);
 
-  const { entry_token: token } = await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", password: "111111" });
+  const { entry_token: token } = await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", password: PASS });
   assert.ok(token);
   assert.equal((await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", token })).id, 1); // tai lai trang
   await assert.rejects(examService.getExamForStudent(1, "hs-khac", undefined, { ip: "ip", token }), (e: AppError) => e.status === 401); // ve cua nguoi khac
 
-  assert.equal((await entry.settings(1, { regenerate: true })).password, "222222");
+  setPassword("11112222"); // doi PROCTOR_PASSWORD
   await assert.rejects(examService.getExamForStudent(1, "hs", undefined, { ip: "ip", token }), (e: AppError) => e.status === 401);
 });
 
@@ -382,7 +457,7 @@ test("mật khẩu vào đề: nộp bài phải kèm vé hợp lệ; tắt đi 
   const { entry, examService, submissions } = entrySetup();
   await entry.settings(1, { enabled: true });
   await assert.rejects(submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT }), (e: AppError) => e.status === 401);
-  const { entry_token } = await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", password: "111111" });
+  const { entry_token } = await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", password: PASS });
   assert.equal((await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, entry_token })).earned, 4);
   await entry.settings(1, { enabled: false });
   assert.equal((await submissions.submit({ exam_id: 1, student_name: "hs2", answers: {} })).earned, 0);
@@ -467,15 +542,13 @@ test("phiên bản: dạng LỚN.NHỎ; nhỏ 1.0 → 1.1, lớn 1.5 → 2.0", (
   assert.throws(() => bump("1", "small"), /LỚN.NHỎ/);
 });
 
-test("cho làm lại xong: mã giám thị tự đổi, mã cũ hết hiệu lực", async () => {
+test("cho làm lại xong: mật khẩu đề không tự đổi, cả 2 mật khẩu vẫn dùng được", async () => {
   const { submissions, proctor, examRow } = setup();
   await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
   await proctor.grantRetake({ exam_id: 1, student_name: "hs", password: CODE }, "ip");
-  const fresh = String(examRow(1)?.proctor_code);
-  assert.match(fresh, /^\d{6}$/);
-  assert.notEqual(fresh, CODE);
-  await assert.rejects(proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: CODE }, "ip2"), (e: AppError) => e.status === 401);
-  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: fresh }, "ip3"), { ok: true });
+  assert.equal(examRow(1)?.proctor_code, CODE);
+  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: PASS }, "ip2"), { ok: true });
+  assert.deepEqual(await proctor.authorizeExit({ type: "THOAT_KHAN_CAP", student_name: "hs", exam_id: 1, password: CODE }, "ip3"), { ok: true });
 });
 
 test("lịch sử theo đề: chỉ các lần làm của đề đó", async () => {
@@ -484,4 +557,75 @@ test("lịch sử theo đề: chỉ các lần làm của đề đó", async () 
   assert.equal((await submissions.history("an", 1, 3, 1)).total, 2);
   assert.equal((await submissions.history("an", 1, 3, "2")).total, 1);
   assert.equal((await submissions.history("an")).total, 3);
+});
+
+test("đổi mật khẩu riêng của đề giữa ca thi: học sinh đã vào đề (vé vào đề) vẫn nộp được bài", async () => {
+  const db = new MemoryDatabase({ exams: [{ ...EXAM, require_password: true }] });
+  const exams = new ExamRepository(db);
+  const results = new ResultRepository(db);
+  const events = new EventRepository(db);
+  const config = new Config({ PROCTOR_PASSWORD: PASS, SESSION_SECRET: "s".repeat(32) });
+  const attempts = new AttemptService({ results, events });
+  const entry = new EntryPasswordService({ config, exams, events, limiter: new RateLimiter() });
+  const examService = new ExamService({ exams, attempts, grading, entryPasswords: entry });
+  const submissions = new SubmissionService({ examService, results, attempts, grading });
+  const { entry_token } = await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", password: CODE });
+  await new ProctorCodeService({ config, exams }).getCode(1, true); // admin doi ma rieng
+  assert.equal((await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, entry_token })).earned, 4);
+});
+
+test("vé lượt: đang làm dở mà admin tắt \"làm lại nhiều lần\" → vẫn tải lại + nộp được lượt đó; nộp xong vé hết hạn", async () => {
+  const { submissions, examService, db, results } = setup();
+  await db.update("exams", { id: 1 }, { allow_retake: true });
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: {}, submission_key: "luot-1" });
+  // Vao luot 2 luc de con bat -> nhan ve luot
+  const { attempt_ticket } = await examService.getExamForStudent(1, "hs");
+  assert.ok(attempt_ticket);
+  await db.update("exams", { id: 1 }, { allow_retake: false });
+  // Tai lai trang: khong co ve -> het luot; co ve -> vao tiep
+  await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409 && e.extra.needsProctor === true);
+  assert.equal((await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", attemptTicket: attempt_ticket })).id, 1);
+  // Nop: bai cua luot 2 duoc luu (khong tra nham ket qua luot 1)
+  const second = await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, submission_key: "luot-2", attempt_ticket });
+  assert.equal(second.earned, 4);
+  assert.equal(results.length, 2);
+  // Ve cu khong dung lai duoc de nop them
+  await assert.rejects(
+    submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, submission_key: "luot-3", attempt_ticket }),
+    (e: AppError) => e.status === 409 && (e.extra.result as { id: number }).id === second.id
+  );
+  await assert.rejects(examService.getExamForStudent(1, "hs", undefined, { ip: "ip", attemptTicket: attempt_ticket }), (e: AppError) => e.status === 409);
+  assert.equal(results.length, 2);
+});
+
+test("bản nháp đã nộp (mất phản hồi) ở đề làm lại nhiều lần: server báo draft_submitted để máy bỏ bản nháp", async () => {
+  const { submissions, examService, db } = setup();
+  await db.update("exams", { id: 1 }, { allow_retake: true });
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: RIGHT, submission_key: "luot-1" });
+  assert.equal((await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", submissionKey: "luot-1" })).draft_submitted, true);
+  assert.equal((await examService.getExamForStudent(1, "hs", undefined, { ip: "ip", submissionKey: "luot-chua-nop" })).draft_submitted, undefined);
+  assert.equal((await examService.getExamForStudent(1, "hs-khac", undefined, { ip: "ip", submissionKey: "luot-1" })).draft_submitted, undefined);
+});
+
+test("bấm \"cho làm lại\" 2 lần cùng lúc chỉ mở 1 lượt", async () => {
+  const { submissions, examService, proctor } = setup();
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
+  const grant = (ip: string) => proctor.grantRetake({ exam_id: 1, student_name: "hs", password: PASS }, ip);
+  await Promise.all([grant("ip-1"), grant("ip-2")]);
+  await examService.getExamForStudent(1, "hs");
+  await submissions.submit({ exam_id: 1, student_name: "hs", answers: {} });
+  await assert.rejects(examService.getExamForStudent(1, "hs"), (e: AppError) => e.status === 409);
+});
+
+test("giới hạn dò mật khẩu có cửa sổ thời gian: sai rải rác cả ngày không bị khoá; nhập đúng thì xoá đếm", () => {
+  let now = 0;
+  const lim = new RateLimiter({ maxFails: 3, lockMs: 60_000, windowMs: 10 * 60_000, now: () => now });
+  for (let i = 0; i < 10; i++) { lim.recordFailure("ip"); now += 11 * 60_000; } // moi lan cach 11 phut
+  lim.assertNotLocked("ip");
+  lim.recordFailure("ip"); lim.recordFailure("ip");
+  assert.equal(lim.recordFailure("ip"), 0); // 3 lan lien tiep -> khoa
+  assert.throws(() => lim.assertNotLocked("ip"), (e: AppError) => e.status === 429);
+  // Nhap dung o noi khac (reset) -> het khoa
+  lim.reset("ip");
+  lim.assertNotLocked("ip");
 });

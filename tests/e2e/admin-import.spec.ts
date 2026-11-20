@@ -1,5 +1,6 @@
 // Chuc nang quan trong 1: admin dang nhap, nhap de bang JSON, xuat ban
 import { expect, test } from "@playwright/test";
+import { PROCTOR_PASSWORD } from "./support/env.ts";
 import { IMPORT_JSON, IMPORT_JSON_NEW_STRUCTURE } from "./support/fixtures.ts";
 import { acceptDialogs, dbState, importJson, loginAdmin, resetDb, seed } from "./support/helpers.ts";
 
@@ -44,7 +45,7 @@ test("nhập đề JSON → xem trước → xuất bản → lưu vào DB kèm 
   const { exams } = await dbState();
   expect(exams).toHaveLength(1);
   expect(exams[0]).toMatchObject({ title: IMPORT_JSON.title, duration_minutes: 15 });
-  expect(exams[0].proctor_code).toMatch(/^\d{6}$/); // server tu gan ma giam thi
+  expect(exams[0].proctor_code).toMatch(/^\d{6}$/); // server tu gan mat khau rieng 6 so cua de
   const questions = exams[0].questions as Record<string, unknown>[];
   expect(questions).toHaveLength(3);
   expect(questions[0]).toMatchObject({ type: "single", part: 0 });
@@ -88,19 +89,27 @@ test("JSON hỏng hoặc sai dữ liệu thì báo lỗi, không xuất bản", 
   expect((await dbState()).exams).toHaveLength(0);
 });
 
-test("icon chìa khoá: xem mã giám thị 6 số của đề, đổi mã mới", async ({ page }) => {
+test("icon chìa khoá: xem mật khẩu riêng của đề + mật khẩu chung, đổi mật khẩu riêng; bật / tắt cho làm lại nhiều lần (mặc định tắt)", async ({ page }) => {
   acceptDialogs(page);
   const [exam] = await seed("exams", [{ title: "Đề có mã", duration_minutes: 10, questions: [], proctor_code: "111222" }]);
   await loginAdmin(page);
 
   const row = page.locator("#examTableBody tr", { hasText: "Đề có mã" });
-  await row.getByRole("button", { name: `Mã giám thị đề #${exam.id}` }).click();
+  await row.getByRole("button", { name: `Mật khẩu đề #${exam.id}` }).click();
   const code = page.locator("#proctorCodeValue");
   await expect(code).toHaveText("111222");
-
-  await page.getByRole("button", { name: "Đổi mã mới" }).click();
+  await expect(page.locator("#commonPasswordValue")).toHaveText(PROCTOR_PASSWORD);
+  await page.getByRole("button", { name: "Đổi mật khẩu riêng" }).click();
   await expect(code).toHaveText(/^\d{6}$/);
   await expect(code).not.toHaveText("111222");
-  const newCode = await code.textContent();
-  expect((await dbState()).exams[0].proctor_code).toBe(newCode);
+  expect((await dbState()).exams[0].proctor_code).toBe(await code.textContent());
+
+  const retake = page.locator("#allowRetakeEnabled");
+  await expect(retake).not.toBeChecked();
+  await retake.check();
+  await expect(row).toContainText("Làm lại nhiều lần");
+  expect((await dbState()).exams[0].allow_retake).toBe(true);
+  await retake.uncheck();
+  await expect(row).not.toContainText("Làm lại nhiều lần");
+  expect((await dbState()).exams[0].allow_retake).toBe(false);
 });

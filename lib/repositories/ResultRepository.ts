@@ -14,6 +14,8 @@ export interface ResultStore {
   listByStudentForExams(studentName: string, examIds: number[]): Promise<ResultSummaryRow[]>;
   // Moi lan nop cua thi sinh cho de nay, moi nhat truoc
   listByExamAndStudent(examId: number, studentName: string): Promise<ResultSummaryRow[]>;
+  // Lan nop da luu cua 1 luot lam bai (khoa chong nop trung)
+  findBySubmissionKey(examId: number, studentName: string, key: string): Promise<ResultSummaryRow | null>;
   create(result: NewResult): Promise<ResultRow>;
 }
 
@@ -53,6 +55,15 @@ export class ResultRepository implements ResultStore {
 
   listByStudent(studentName: string): Promise<ResultSummaryRow[]> {
     return this.db.select<ResultSummaryRow>("exam_results", { columns: SUMMARY_COLUMNS, filter: { student_name: studentName }, orderBy: NEWEST_FIRST });
+  }
+
+  async findBySubmissionKey(examId: number, studentName: string, key: string): Promise<ResultSummaryRow | null> {
+    const rows = await this.db.select<ResultSummaryRow>("exam_results", {
+      columns: SUMMARY_COLUMNS,
+      filter: { exam_id: examId, student_name: studentName, submission_key: key },
+      limit: 1
+    });
+    return rows[0] ?? null;
   }
 
   create(result: NewResult): Promise<ResultRow> {

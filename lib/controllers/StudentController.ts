@@ -50,11 +50,13 @@ export class StudentController {
       .get("exam", ({ req, query, client, ip }) => this.examService.getExamForStudent(query.get("id"), cleanString(query.get("student")), client, {
         password: StudentController.header(req.headers["x-exam-password"]),
         token: StudentController.header(req.headers["x-exam-entry"]),
+        attemptTicket: StudentController.header(req.headers["x-exam-attempt"]),
+        submissionKey: StudentController.header(req.headers["x-exam-submission"]),
         ip
       }))
       .get("history", ({ query }) => this.submissionService.history(query.get("student"), query.get("page"), query.get("size"), query.get("exam_id")))
       .post("submit", ({ body, client }) => this.submissionService.submit(body, client))
-      .post("proctor-exit", ({ body, ip, client }) => this.proctorService.authorizeExit(body, ip, client))
+      .post("proctor-exit", ({ body, ip }) => this.proctorService.authorizeExit(body, ip))
       // File cau hinh SEB cua de (cong khai: SEB tai qua link sebs://)
       .get("seb-config", async ({ query, client }) => new RawResponse(
         await this.sebConfigService.configFile(query.get("exam_id"), client.origin),

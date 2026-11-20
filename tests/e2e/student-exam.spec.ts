@@ -11,6 +11,27 @@ test.beforeEach(async () => {
   [{ id: examId }] = (await seed("exams", [FULL_EXAM])) as { id: number }[];
 });
 
+test("đăng nhập: hiện lời nhắn 1 lần, bấm Đóng là tắt; tải lại trang không hiện lại; có nút Tải lại danh sách", async ({ page }) => {
+  await page.goto("/index.html");
+  await page.locator("#username").fill("hs_chao");
+  await page.locator("#submitBtn").click();
+  const modal = page.locator("#welcomeModal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText("Lời nhắn từ chị Thảo");
+  await expect(modal.locator(".welcome-tier")).toHaveText([/7 đến 8 điểm\s*5k/, /9 đến 10 điểm\s*15k/]);
+  await modal.getByRole("button", { name: "Đóng" }).click();
+  await expect(modal).toBeHidden();
+
+  await page.reload();
+  await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toBeVisible();
+  await expect(modal).toBeHidden();
+
+  // Tai lai danh sach: de moi tao sau khi vao trang hien ra ma khong can tai lai ca trang
+  await seed("exams", [{ ...FULL_EXAM, title: "Đề mới thêm" }]);
+  await page.getByRole("button", { name: "Tải lại" }).click();
+  await expect(page.locator(".card", { hasText: "Đề mới thêm" })).toBeVisible();
+});
+
 async function startExam(page: Page, student: string): Promise<void> {
   await loginStudent(page, student);
   await page.getByRole("button", { name: "Vào làm bài" }).click();
@@ -82,7 +103,7 @@ test("làm đủ mới nộp được → server chấm đúng → lưu kết qu
   await expect(page.getByRole("button", { name: "Vào làm bài" })).toHaveCount(0);
 });
 
-test("làm lại lần 2: phải nhập đúng mã giám thị của đề, có ghi nhật ký", async ({ page }) => {
+test("làm lại lần 2 (mặc định): phải nhập đúng mật khẩu đề, có ghi nhật ký", async ({ page }) => {
   acceptDialogs(page);
   await startExam(page, "hs_lam_lai");
   // Lan 1: sai cau 1, dung 4 cau con lai -> 4/5 phan tu dong
@@ -98,14 +119,14 @@ test("làm lại lần 2: phải nhập đúng mã giám thị của đề, có 
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("#exitTitle")).toHaveText("Làm lại bài thi");
 
-  // Mat khau chung (.env) khong dung duoc cho de da co ma
-  await dialog.locator("#proctorInput").fill(PROCTOR_PASSWORD);
+  // Sai mat khau -> bao loi that tu server
+  await dialog.locator("#proctorInput").fill("000000");
   await dialog.locator("#btnConfirmExit").click();
   // Cho loi THAT tu server (o loi co san chu mac dinh khi an)
   await expect(dialog.locator("#unlockError")).toBeVisible();
   await expect(dialog.locator("#unlockError")).toContainText("Còn 4 lần thử");
 
-  await dialog.locator("#proctorInput").fill(FULL_EXAM_CODE);
+  await dialog.locator("#proctorInput").fill(PROCTOR_PASSWORD);
   await dialog.locator("#btnConfirmExit").click();
 
   // Vao lan 2: bai trong, lam lai tu dau
@@ -126,17 +147,80 @@ test("làm lại lần 2: phải nhập đúng mã giám thị của đề, có 
   await page.getByRole("button", { name: "Làm lại" }).click();
   await expect(page.locator("#viewUnlockModal")).toBeVisible();
 
-  // Ma giam thi da tu doi sau lan cho lam lai: ma cu khong dung duoc nua
-  const newCode = String((await dbState()).exams[0].proctor_code);
-  expect(newCode).toMatch(/^\d{6}$/);
-  expect(newCode).not.toBe(FULL_EXAM_CODE);
+  // Lan 3: mat khau rieng cua de cung cho lam lai duoc (mat khau khong tu doi)
   await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
   await page.locator("#btnConfirmExit").click();
-  await expect(page.locator("#unlockError")).toBeVisible();
-  await expect(page.locator("#unlockError")).toContainText("Mã giám thị không đúng");
-  await page.locator("#proctorInput").fill(newCode);
-  await page.locator("#btnConfirmExit").click();
   await expect(page.locator("#viewExamPlay")).toBeVisible();
+});
+
+test("đề bật cho làm lại nhiều lần: bấm Làm lại là vào làm ngay, không hỏi mật khẩu", async ({ page }) => {
+  acceptDialogs(page);
+  await updateRow("exams", examId, { allow_retake: true });
+  await startExam(page, "hs_lam_nhieu");
+  for (let lan = 1; lan <= 3; lan++) {
+    await answerAll(page, FULL_EXAM_RIGHT);
+    await page.locator("#btnSubmit").click();
+    await expect(page.locator("#viewLockScreen")).toBeVisible();
+    await page.getByRole("button", { name: "Về trang đề thi" }).click();
+    if (lan < 3) {
+      await page.getByRole("button", { name: "Làm lại" }).click();
+      await expect(page.locator("#viewUnlockModal")).toBeHidden();
+      await expect(page.locator("#viewExamPlay")).toBeVisible();
+    }
+  }
+  const { exam_results, exam_events } = await dbState();
+  expect(exam_results).toHaveLength(3);
+  expect(exam_events.filter(e => e.type === "CHO_LAM_LAI")).toHaveLength(0);
+});
+
+test("đang làm lượt 2 thì admin tắt \"làm lại nhiều lần\": tải lại trang vẫn làm tiếp và nộp được, không mất bài", async ({ page }) => {
+  acceptDialogs(page);
+  await updateRow("exams", examId, { allow_retake: true });
+  await startExam(page, "hs_doi_cai_dat");
+  await answerAll(page, [{ kind: "option", index: 0 }, ...FULL_EXAM_RIGHT.slice(1)]);
+  await page.locator("#btnSubmit").click();
+  await page.getByRole("button", { name: "Về trang đề thi" }).click();
+  await page.getByRole("button", { name: "Làm lại" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  await answerCurrent(page, FULL_EXAM_RIGHT[0]);
+
+  await updateRow("exams", examId, { allow_retake: false });
+  await page.reload();
+  await expect(page.locator("#welcomeModal")).toBeHidden(); // tai lai trang: khong hien lai loi nhan
+  // Dang lam do luot 2 -> the de hien "Dang lam do" (khong phai "Da nop")
+  await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toContainText("Đang làm dở");
+  await page.getByRole("button", { name: "Tiếp tục làm bài" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  await expect(page.locator("#viewUnlockModal")).toBeHidden();
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
+  for (const [i, a] of FULL_EXAM_RIGHT.entries()) {
+    await page.locator(".q-nav-btn").nth(i).click();
+    await answerCurrent(page, a);
+  }
+  await page.locator("#btnSubmit").click();
+  await expect(page.locator("#finalScore")).toHaveText("5 / 5");
+  const { exam_results } = await dbState();
+  expect(exam_results.map(r => r.score)).toEqual([6.67, 8.33]);
+});
+
+test("cùng 1 trình duyệt: bài làm dở của thí sinh này không hiện / không mở được ở thí sinh khác", async ({ page }) => {
+  await startExam(page, "hs_mot");
+  await answerCurrent(page, FULL_EXAM_RIGHT[0]);
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
+
+  // Thi sinh khac dang nhap tren cung trinh duyet
+  page.on("dialog", d => void d.accept());
+  await loginStudent(page, "hs_hai");
+  const card = page.locator(".card", { hasText: FULL_EXAM.title });
+  await expect(card).not.toContainText("Đang làm dở");
+  await card.getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 0 / 5");
+
+  // Thi sinh dau quay lai: bai lam do van con nguyen
+  await loginStudent(page, "hs_mot");
+  await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toContainText("Đang làm dở");
+  await page.getByRole("button", { name: "Tiếp tục làm bài" }).click();
+  await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
 });
 
 test("trả lời sai được chấm 0, đúng sai chấm theo thang THPT", async ({ page }) => {
@@ -172,7 +256,7 @@ test("đề bật khoá khi rời trang: tải lại giữa chừng giữ bài l
   await page.reload();
   await page.getByRole("button", { name: "Tiếp tục làm bài" }).click();
   await expect(page.locator("#shieldTitle")).toHaveText("BÀI THI ĐÃ BỊ KHOÁ");
-  await page.locator("#shieldCode").fill(FULL_EXAM_CODE);
+  await page.locator("#shieldCode").fill(PROCTOR_PASSWORD);
   await page.locator("#btnShieldUnlock").click();
   await expect(page.locator("#viewShield")).toBeHidden();
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
@@ -189,9 +273,12 @@ test("thoát khẩn cấp: sai mật khẩu bị ghi log, đúng mật khẩu th
   await expect(page.locator("#unlockError")).toBeVisible();
   await expect(page.locator("#unlockError")).toContainText("Còn 4 lần thử");
 
-  await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
+  await page.locator("#proctorInput").fill(PROCTOR_PASSWORD);
   await page.locator("#btnConfirmExit").click();
-  await expect(page).toHaveURL(/index\.html/);
+  // Ve danh sach de (khong dang xuat, khong dong app)
+  await expect(page.locator("#viewExamList")).toBeVisible();
+  await expect(page.locator("#viewExamPlay")).toBeHidden();
+  await expect(page).toHaveURL(/exam\.html\?user=hs_thoat/);
 
   const { exam_events, exam_results } = await dbState();
   expect(exam_events.map(e => e.type)).toEqual(["SAI_MAT_KHAU", "THOAT_KHAN_CAP"]);
@@ -199,8 +286,8 @@ test("thoát khẩn cấp: sai mật khẩu bị ghi log, đúng mật khẩu th
   expect(String(exam_events[1].detail)).toContain("Thí sinh mệt");
   expect(exam_results).toHaveLength(0); // chua nop
 
-  // Vao lai: bai lam con nguyen
-  await loginStudent(page, "hs_thoat");
+  // Vao lai ngay tu danh sach de: bai lam con nguyen
+  await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toContainText("Đang làm dở");
   await page.getByRole("button", { name: "Tiếp tục làm bài" }).click();
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
 });
@@ -230,7 +317,7 @@ test("đề bật khoá khi rời trang: rời bài là khoá ngay; tải lại 
   await page.locator("#btnShieldUnlock").click();
   await expect(page.locator("#shieldError")).toBeVisible();
   await expect(page.locator("#shieldError")).toContainText("Còn 4 lần thử");
-  await page.locator("#shieldCode").fill(FULL_EXAM_CODE);
+  await page.locator("#shieldCode").fill(PROCTOR_PASSWORD);
   await page.locator("#btnShieldUnlock").click();
   await expect(shield).toBeHidden();
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
@@ -259,12 +346,15 @@ test("mặc định (tắt khoá): rời trang chỉ cảnh báo + ghi nhật k�
   await expect(page.locator("#answeredStatus")).toHaveText("Đã trả lời: 1 / 5");
 });
 
-test("nộp bài xong: thoát không cần mã giám thị", async ({ page }) => {
+test("nộp bài xong: không có nút thoát, chỉ xem lịch sử hoặc về trang đề thi", async ({ page }) => {
   acceptDialogs(page);
-  await startExam(page, "hs_thoat_sau_nop");
+  await startExam(page, "hs_sau_nop");
   await answerAll(page, FULL_EXAM_RIGHT);
   await page.locator("#btnSubmit").click();
-  await expect(page.locator("#viewLockScreen")).toBeVisible();
-  await page.locator("#btnExitAfterSubmit").click();
-  await expect(page).toHaveURL(/index\.html/);
+  const done = page.locator("#viewLockScreen");
+  await expect(done).toBeVisible();
+  await expect(done.getByRole("button")).toHaveText(["Xem lịch sử làm bài", "Về trang đề thi"]);
+  await done.getByRole("button", { name: "Về trang đề thi" }).click();
+  await expect(page.locator("#viewExamList")).toBeVisible();
+  await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toContainText("Đã nộp");
 });

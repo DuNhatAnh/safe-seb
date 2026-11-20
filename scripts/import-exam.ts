@@ -90,7 +90,7 @@ const created = await db.insert<ExamRow>("exams", {
   questions: exam.questions,
   proctor_code: generateProctorCode()
 });
-console.log(`✔ Đã nhập: mã đề ${created.id} · mã giám thị ${created.proctor_code}`);
+console.log(`✔ Đã nhập: mã đề ${created.id} · mật khẩu riêng của đề ${created.proctor_code} (mật khẩu chung PROCTOR_PASSWORD cũng dùng được)`);
 }
 }
 

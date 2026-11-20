@@ -1,9 +1,9 @@
 // Safe Exam Browser: admin bat bat buoc SEB; trinh duyet thuong bi chan; trong SEB lam bai + thoat -> SEB tu dong.
 // SEB that them "SEB/<phien ban>" vao User-Agent -> gia lap bang userAgent cua Playwright.
 import { expect, test } from "@playwright/test";
-import { APP_URL } from "./support/env.ts";
-import { FULL_EXAM, FULL_EXAM_CODE } from "./support/fixtures.ts";
-import { acceptDialogs, dbState, loginAdmin, loginStudent, resetDb, seed } from "./support/helpers.ts";
+import { APP_URL, PROCTOR_PASSWORD } from "./support/env.ts";
+import { FULL_EXAM, FULL_EXAM_RIGHT } from "./support/fixtures.ts";
+import { acceptDialogs, answerCurrent, dbState, loginAdmin, loginStudent, resetDb, seed } from "./support/helpers.ts";
 
 const SEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 SEB/3.7.1";
 
@@ -53,7 +53,7 @@ test("trình duyệt thường: đề bắt buộc SEB chỉ có nút mở bằn
   expect(await res.json()).toMatchObject({ needsSeb: true });
 });
 
-test("trong SEB: làm bài được, không đòi toàn màn hình; giám thị cho thoát → mở trang thoát để SEB tự đóng", async ({ browser }) => {
+test("trong SEB: làm bài được, không đòi toàn màn hình; giám thị cho thoát khẩn cấp → về danh sách đề (SEB không đóng)", async ({ browser }) => {
   const page = await (await browser.newContext({ userAgent: SEB_UA })).newPage();
   await loginStudent(page, "hs_seb");
   await page.locator(".card", { hasText: FULL_EXAM.title }).getByRole("button", { name: "Vào làm bài" }).click();
@@ -61,13 +61,32 @@ test("trong SEB: làm bài được, không đòi toàn màn hình; giám thị 
   await expect(page.locator("#viewShield")).toBeHidden(); // SEB tu khoa may, khong can toan man hinh cua trinh duyet
 
   await page.getByRole("button", { name: "Thoát khẩn cấp (Giám thị)" }).first().click();
-  await page.locator("#proctorInput").fill(FULL_EXAM_CODE);
+  await page.locator("#proctorInput").fill(PROCTOR_PASSWORD);
   await page.locator("#btnConfirmExit").click();
+  await expect(page.locator("#viewExamList")).toBeVisible();
+  await expect(page).toHaveURL(/exam\.html\?user=hs_seb/);
+  await expect(page.locator(".card", { hasText: FULL_EXAM.title })).toContainText("Đang làm dở");
+  expect((await dbState()).exam_events.map(e => e.type)).toEqual(["THOAT_KHAN_CAP"]);
+});
+
+test("trong SEB: nộp bài xong có thêm nút \"Thoát Safe Exam Browser\" (không cần mật khẩu) → SEB tự đóng", async ({ browser }) => {
+  const page = await (await browser.newContext({ userAgent: SEB_UA })).newPage();
+  acceptDialogs(page);
+  await loginStudent(page, "hs_seb_nop");
+  await page.locator(".card", { hasText: FULL_EXAM.title }).getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  for (const [i, a] of FULL_EXAM_RIGHT.entries()) {
+    await page.locator(".q-nav-btn").nth(i).click();
+    await answerCurrent(page, a);
+  }
+  await page.locator("#btnSubmit").click();
+  const done = page.locator("#viewLockScreen");
+  await expect(done).toBeVisible();
+  await expect(done.getByRole("button")).toHaveText(["Xem lịch sử làm bài", "Về trang đề thi", "Thoát Safe Exam Browser"]);
+  await done.getByRole("button", { name: "Thoát Safe Exam Browser" }).click();
   await expect(page).toHaveURL(new RegExp(`/seb-quit\\.html\\?exam=${examId}&k=`));
   await expect(page.locator(".lock-title")).toHaveText("ĐANG THOÁT");
-
   // Trang thoat dung bang quitURL trong file .seb cua de
   const xml = await (await page.request.get(`/api/seb-config?exam_id=${examId}`)).text();
   expect(xml.replace(/&amp;/g, "&")).toContain(page.url());
-  expect((await dbState()).exam_events.map(e => e.type)).toEqual(["THOAT_KHAN_CAP"]);
 });
