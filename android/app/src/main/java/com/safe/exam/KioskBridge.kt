@@ -70,6 +70,13 @@ class KioskBridge(private val activity: Activity) {
     @JavascriptInterface
     fun appVersion(): String = "v${BuildConfig.VERSION_NAME}"
 
+    /** Man hinh dang duoc ghim (lock task / ghim ung dung)? lockdown.js hoi luc bat dau lam bai. */
+    @JavascriptInterface
+    fun isPinned(): Boolean {
+        val am = activity.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        return am.lockTaskModeState != android.app.ActivityManager.LOCK_TASK_MODE_NONE
+    }
+
     /** Trang dang nhap hien nut "Go khoa thiet bi" khi app dang la Device Owner. */
     @JavascriptInterface
     fun isDeviceOwner(): Boolean = KioskManager.isDeviceOwner(activity)

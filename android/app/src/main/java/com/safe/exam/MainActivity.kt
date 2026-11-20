@@ -6,6 +6,9 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -69,6 +72,50 @@ class MainActivity : AppCompatActivity() {
         // nop bai xong tu bo ghim (KioskBridge.unlock)
 
         webView.loadUrl(examUrl)
+    }
+
+    // ---------------------------------------------------------------- Giu ghim man hinh khi dang thi
+    // App cai thuong (khong phai Device Owner): Android luon cho go ghim (giu Quay lai + Da nhiem / vuot len giu).
+    // Dang lam bai (KioskManager.wasActive) ma bi go ghim -> bao trang (che bai, tinh roi bai) va TU HOI GHIM LAI.
+    // Chi het ghim khi trang goi KioskBridge.unlock / stopLock: nop bai xong hoac giam thi nhap mat khau thoat.
+    private val handler = Handler(Looper.getMainLooper())
+    private var lastPinned: Boolean? = null
+    private var lastPinRequest = 0L
+
+    private val pinWatch = object : Runnable {
+        override fun run() {
+            checkPin()
+            handler.postDelayed(this, 1000)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        handler.removeCallbacks(pinWatch)
+        handler.post(pinWatch)
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(pinWatch)
+        super.onPause()
+    }
+
+    private fun checkPin() {
+        if (!KioskManager.wasActive(this)) {
+            lastPinned = null
+            return
+        }
+        val pinned = isPinned()
+        if (pinned != lastPinned) {
+            lastPinned = pinned
+            notifyWeb(if (pinned) "pinned" else "unpinned")
+        }
+        // Chua ghim + app dang duoc chon (khong co hop "Ghim ung dung?" dang hien) -> hoi ghim lai, toi da 4 giay / lan
+        val now = SystemClock.elapsedRealtime()
+        if (!pinned && hasWindowFocus() && now - lastPinRequest > 4000) {
+            lastPinRequest = now
+            KioskManager.startLock(this)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

@@ -47,6 +47,8 @@ const Lockdown = {
   nativeOverlay: false,
   nativeBlur: false,
   nativeSplit: false,   // app bao dang chia doi man hinh
+  nativeUnpinned: false, // app bao man hinh CHUA / KHONG CON duoc ghim
+  wasPinned: false,      // da tung ghim trong luot nay (go ghim sau do moi tinh la roi bai)
   shrunk: false,        // cua so bai thi bi hep di nhieu (chia doi man hinh / thu nho cua so)
   hiddenAt: 0,          // thoi diem roi bai (tinh so giay roi bai)
   // Loai con tro cua lan cham / bam gan nhat: "touch" (dien thoai) / "mouse" / "pen"
@@ -57,6 +59,16 @@ const Lockdown = {
     this.nativeOverlay = false;
     this.nativeBlur = false;
     this.nativeSplit = false;
+    this.nativeUnpinned = false;
+    this.wasPinned = false;
+    // App Android ban moi: hoi ngay trang thai ghim (khong cho tin hieu - tin hieu co the den truoc khi trang san sang)
+    try {
+      if (window.KioskBridge && typeof window.KioskBridge.isPinned === "function") {
+        const pinned = !!window.KioskBridge.isPinned();
+        this.wasPinned = pinned;
+        this.nativeUnpinned = !pinned;
+      }
+    } catch (e) { }
     this.shrunk = this.isShrunk();
     this.hiddenAt = 0;
     this.strict = !!strict;
@@ -156,9 +168,14 @@ const Lockdown = {
   // Kiem tra trang thai, hien / an man che
   check(reason) {
     if (!this.active) return;
+    // Moi vao bai, chua bam "Ghim" tren hop thoai cua Android: che bai, KHONG tinh roi bai
+    if (this.nativeUnpinned && !this.wasPinned) {
+      this.showShield("Bấm \"Ghim\" trên hộp thoại của điện thoại để bắt đầu làm bài (bài thi phải được ghim màn hình).");
+      return;
+    }
     const fsOk = !this.needFullscreen() || this.isFullscreen();
     const focusOk = !document.hidden && (document.hasFocus() || this.suspended()) && !this.nativeBlur && !this.nativeOverlay
-      && !this.nativeSplit && !this.shrunk;
+      && !this.nativeSplit && !this.shrunk && !this.nativeUnpinned;
     if (fsOk && focusOk) {
       this.wasOk = true;
       if (this.locked) this.showShield();
@@ -171,6 +188,7 @@ const Lockdown = {
       this.recordLeave(!fsOk ? "thoát toàn màn hình" : "chuyển cửa sổ / tab");
     }
     this.showShield(reason || (!fsOk ? "Bài thi yêu cầu chế độ toàn màn hình."
+      : this.nativeUnpinned ? "Màn hình bài thi đã bị gỡ ghim. Bấm \"Ghim\" trên hộp thoại của điện thoại để làm tiếp (chỉ giám thị nhập mật khẩu mới thoát được)."
       : this.nativeOverlay ? "Đang có bong bóng chat hoặc cửa sổ nổi của ứng dụng khác trên màn hình. Tắt nó đi rồi bấm \"Quay lại bài thi\"."
         : this.nativeSplit || this.shrunk ? "Cửa sổ bài thi bị chia đôi / thu nhỏ. Mở bài thi toàn màn hình rồi bấm \"Quay lại bài thi\"."
           : "Cửa sổ bài thi không còn được chọn."));
@@ -229,6 +247,8 @@ const Lockdown = {
   async resume() {
     // Con cua so noi thi lan cham tiep theo app lai bao -> man che hien lai
     this.nativeOverlay = false;
+    // Chua ghim -> hoi ghim lai ngay (app Android)
+    if (this.nativeUnpinned && window.KioskBridge && typeof window.KioskBridge.startLock === "function") window.KioskBridge.startLock();
     await this.enterFullscreen();
     window.focus();
     this.check();
@@ -339,6 +359,12 @@ const Lockdown = {
         this.log("MAT_TIEU_DIEM", "Màn hình bài thi mất tiêu điểm: bấm vào bong bóng chat / thanh thông báo / cửa sổ ứng dụng khác");
       } else if (type === "focus") {
         this.nativeBlur = false;
+      } else if (type === "pinned") {
+        this.wasPinned = true;
+        this.nativeUnpinned = false;
+      } else if (type === "unpinned") {
+        this.nativeUnpinned = true;
+        if (this.wasPinned) this.log("GO_GHIM", "Gỡ ghim màn hình bài thi (thoát chế độ khoá của điện thoại)");
       } else if (type === "split") {
         this.nativeSplit = true;
         this.log("CHIA_MAN_HINH", "Chia đôi màn hình / cửa sổ nhỏ trên điện thoại");

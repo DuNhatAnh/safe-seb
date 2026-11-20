@@ -7,7 +7,9 @@
 2. Mở file vừa tải → **Cài đặt** (nếu được hỏi, cho phép cài từ "nguồn không xác định").
 3. Mở app **Safe Exam** → khi Android hỏi **"Ghim ứng dụng?"** bấm **Ghim / OK** → đăng nhập, làm bài.
 
-Khi đã ghim: không có Home, đa nhiệm, thanh thông báo. Học sinh vẫn có thể gỡ ghim (giữ Back + đa nhiệm), nhưng
+Khi đã ghim: không có Home, đa nhiệm, thanh thông báo. Android vẫn cho học sinh thao tác gỡ ghim (giữ Back + đa nhiệm / vuốt lên giữ),
+nhưng **đang làm bài mà bị gỡ ghim thì app tự hiện lại hộp "Ghim ứng dụng?"** (mỗi vài giây tới khi ghim), bài thi bị che, ghi `GO_GHIM`
+và tính là rời bài. Chỉ hết ghim khi nộp bài xong hoặc giám thị nhập mật khẩu thoát khẩn cấp. Ngoài ra
 **rời khỏi app là bài thi bị khoá ngay**, chỉ giám thị nhập mật khẩu đề (mật khẩu chung hoặc mật khẩu riêng của đề) mới làm tiếp. Mọi lần khoá / mở khoá đều ghi nhật ký cho admin.
 
 File `.apk` do GitHub tự build mỗi khi code trong `android/` thay đổi (`.github/workflows/android-apk.yml`).

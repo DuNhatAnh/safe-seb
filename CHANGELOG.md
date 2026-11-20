@@ -17,6 +17,12 @@ Hiện ở cuối mọi trang ("Phiên bản 1.1 · mã commit"), trong app Andr
 
 ---
 
+## 1.4 · 2026-11-20
+
+- **App Android giữ ghim màn hình khi đang làm bài**: bị gỡ ghim (giữ Quay lại + Đa nhiệm / vuốt lên giữ) thì bài thi bị che, app tự hỏi "Ghim ứng dụng?" lại tới khi ghim, ghi `GO_GHIM` và tính rời bài (đề bật khoá thì khoá). Chỉ hết ghim khi nộp bài hoặc giám thị nhập mật khẩu thoát khẩn cấp.
+- Mới vào bài chưa bấm "Ghim": che bài, nhắc bấm Ghim, không tính vi phạm.
+- **App Android: cần gỡ app cũ, cài lại.** Link tải cố định: https://safe-seb.vercel.app/tai-app
+
 ## 1.3 · 2026-11-20
 
 - **Làm lại tối đa 3 lần** (đề bật "Cho làm lại"): 3 lần đầu không cần mật khẩu; từ lần thứ 4 giám thị nhập mật khẩu đề, mỗi lần thêm 1 lượt.

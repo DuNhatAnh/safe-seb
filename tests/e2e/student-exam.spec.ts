@@ -372,6 +372,93 @@ test("app Android: ghi tên ứng dụng trợ năng đang bật khi bắt đầ
   expect(row?.detail).toContain("com.giai.bai.ai, com.tu.dong.bam");
 });
 
+test("app Android giữ ghim: mới vào chưa ghim thì chỉ che (không vi phạm); đã ghim mà bị gỡ thì che + GO_GHIM + khoá; Quay lại thì hỏi ghim lại", async ({ browser }) => {
+  await updateRow("exams", examId, { lock_on_leave: true });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, screen: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    const w = window as unknown as { __pinRequests: number };
+    w.__pinRequests = 0;
+    Object.assign(window, {
+      KioskBridge: {
+        startLock() { w.__pinRequests++; }, stopLock() { }, unlock() { }, isDeviceOwner: () => false, releaseDevice() { },
+        appVersion: () => "v1.4", accessibilityServices: () => ""
+      }
+    });
+  });
+  const native = (t: string) => page.evaluate(x => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: x } })), t);
+  const types = () => page.evaluate("tracker.getLogs().map(l => l.type)") as Promise<string[]>;
+  await loginStudent(page, "hs_ghim");
+  await page.getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+
+  // Moi vao: Android hoi "Ghim ung dung?" -> chua ghim: che bai, khong tinh roi bai, khong khoa
+  await native("unpinned");
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldReason")).toContainText("Bấm \"Ghim\"");
+  await expect(page.locator("#shieldTitle")).not.toHaveText("BÀI THI ĐÃ BỊ KHOÁ");
+  expect(await types()).not.toContain("GO_GHIM");
+  await native("pinned");
+  await expect(page.locator("#viewShield")).toBeHidden();
+
+  // Da ghim roi bi go ghim: ghi GO_GHIM, tinh roi bai -> de bat khoa thi khoa
+  await native("unpinned");
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldTitle")).toHaveText("BÀI THI ĐÃ BỊ KHOÁ");
+  expect(await types()).toContain("GO_GHIM");
+  await ctx.close();
+});
+
+test("app Android: gỡ ghim (đề không khoá) → che bài; bấm Quay lại bài thi thì hỏi ghim lại, ghim xong làm tiếp", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, screen: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    const w = window as unknown as { __pinRequests: number };
+    w.__pinRequests = 0;
+    Object.assign(window, {
+      KioskBridge: {
+        startLock() { w.__pinRequests++; }, stopLock() { }, unlock() { }, isDeviceOwner: () => false, releaseDevice() { },
+        appVersion: () => "v1.4", accessibilityServices: () => ""
+      }
+    });
+  });
+  const native = (t: string) => page.evaluate(x => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: x } })), t);
+  await loginStudent(page, "hs_ghim_2");
+  await page.getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#viewExamPlay")).toBeVisible();
+  await native("pinned");
+  await native("unpinned");
+  await expect(page.locator("#shieldReason")).toContainText("đã bị gỡ ghim");
+  const before = await page.evaluate("window.__pinRequests") as number;
+  await page.locator("#btnShieldResume").click();
+  expect(await page.evaluate("window.__pinRequests")).toBe(before + 1);
+  await expect(page.locator("#viewShield")).toBeVisible(); // van chua ghim
+  await native("pinned");
+  await expect(page.locator("#viewShield")).toBeHidden();
+  await ctx.close();
+});
+
+test("app Android: vào bài lúc chưa ghim (hỏi isPinned) → che bài chờ bấm Ghim, không tính vi phạm", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, screen: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      KioskBridge: {
+        startLock() { }, stopLock() { }, unlock() { }, isDeviceOwner: () => false, releaseDevice() { },
+        appVersion: () => "v1.4", accessibilityServices: () => "", isPinned: () => false
+      }
+    });
+  });
+  await loginStudent(page, "hs_ghim_3");
+  await page.getByRole("button", { name: "Vào làm bài" }).click();
+  await expect(page.locator("#viewShield")).toBeVisible();
+  await expect(page.locator("#shieldReason")).toContainText("Bấm \"Ghim\"");
+  expect(await page.evaluate("tracker.getLogs().map(l => l.type)")).not.toContain("GO_GHIM");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("safeexam-native", { detail: { type: "pinned" } })));
+  await expect(page.locator("#viewShield")).toBeHidden();
+  await ctx.close();
+});
+
 test("trả lời sai được chấm 0, đúng sai chấm theo thang THPT", async ({ page }) => {
   acceptDialogs(page);
   await startExam(page, "hs_lam_sai");
