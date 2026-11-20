@@ -37,3 +37,7 @@ playwright-report/
 
 # Android Studio tu tao (duong dan SDK tren may)
 android/local.properties
+
+# File bien moi truong co khoa bi mat (vd: .env.vercel de import len Vercel). Giu .env.example
+.env.*
+!.env.example
