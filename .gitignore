@@ -41,3 +41,7 @@ android/local.properties
 # File bien moi truong co khoa bi mat (vd: .env.vercel de import len Vercel). Giu .env.example
 .env.*
 !.env.example
+
+# Cau hinh Claude rieng tren may (khong commit)
+CLAUDE.md
+.claude/
